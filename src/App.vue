@@ -1083,16 +1083,7 @@ onMounted(() => {
             <p class="play-table-score">+ <ScoreCounter :value="lastScore" /></p>
           </div>
           <div v-else-if="selectedCardCount > 0" class="play-table-preview">
-            <p class="play-table-placeholder">出牌预览</p>
-            <div class="play-table-cards">
-              <PlayingCard
-                v-for="card in selectedCards"
-                :key="card.id"
-                :card="card"
-                :selected="true"
-                compact
-              />
-            </div>
+            <p class="play-table-placeholder">已选 {{ selectedCardCount }} 张 · 等待出牌</p>
             <span class="chip-tag purple" v-if="selectedScorePreview.handType">
               {{ selectedScorePreview.handType.name }} · ≈{{ selectedScorePreview.score }}
             </span>
