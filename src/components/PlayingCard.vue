@@ -22,6 +22,10 @@ const props = defineProps({
   dealIndex: {
     type: Number,
     default: 0
+  },
+  disableEnter: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -64,15 +68,13 @@ const cardClasses = computed(() => {
 const cardRef = ref(null)
 
 onMounted(() => {
-  if (!cardRef.value) return
+  if (!cardRef.value || props.disableEnter) return
   gsap.from(cardRef.value, {
-    x: 240,
-    y: -32,
-    rotation: -10,
+    x: 160,
     opacity: 0,
-    duration: 0.55,
-    delay: props.dealIndex * 0.08,
-    ease: 'back.out(1.6)',
+    duration: 0.4,
+    delay: props.dealIndex * 0.06,
+    ease: 'power2.out',
     clearProps: 'transform,opacity'
   })
 })

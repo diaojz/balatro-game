@@ -98,11 +98,11 @@ export function floatNumber(anchorEl, text, options = {}) {
   const tl = gsap.timeline({ onComplete: () => node.remove() })
   tl.fromTo(
     node,
-    { y: 0, scale: 0.4, opacity: 0 },
-    { y: -18, scale: 1.3, opacity: 1, duration: 0.22, ease: 'back.out(2)' }
+    { y: 0, scale: 0.5, opacity: 0 },
+    { y: -16, scale: 1.2, opacity: 1, duration: 0.18, ease: 'power2.out' }
   )
-  tl.to(node, { y: -38, scale: 1, duration: 0.22, ease: 'power2.out' })
-  tl.to(node, { y: -78, opacity: 0, duration: 0.5, ease: 'power2.in' })
+  tl.to(node, { y: -32, scale: 1, duration: 0.16, ease: 'power2.out' })
+  tl.to(node, { y: -60, opacity: 0, duration: 0.34, ease: 'power2.in' })
 }
 
 /**
