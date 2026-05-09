@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore, buildScoreSequence } from './utils/scoring.js'
-import { BLINDS } from './config/blinds.js'
+import { BLINDS, TOTAL_ANTES } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
 import gsap from 'gsap'
 import {
@@ -60,6 +60,11 @@ const showPlayedCards = ref(false)
 const ownedJokers = ref([])
 const maxJokers = 5
 const HAND_SIZE = 8
+
+const effectiveHandSize = computed(() => {
+  if (blind.value?.bossRule?.key === 'LOW_HAND_SIZE') return HAND_SIZE - 1
+  return HAND_SIZE
+})
 const shopJokers = ref([])
 const triggeredJokerIds = ref([])
 const shimmeringJokerIds = ref([])
@@ -380,8 +385,9 @@ function drawCards(count) {
 
 function dealCards() {
   // 先发牌：新牌按发牌顺序进入手牌（不立即排序），等入场动画结束再触发理牌
-  hand.value = drawCards(HAND_SIZE)
-  scheduleReorderAfterDeal(HAND_SIZE)
+  const size = effectiveHandSize.value
+  hand.value = drawCards(size)
+  scheduleReorderAfterDeal(size)
 }
 
 const currentSortMode = ref('rank') // 'rank' | 'suit'
@@ -476,7 +482,7 @@ function sortHandBySuit() {
 }
 
 function refillHand() {
-  const needed = HAND_SIZE - hand.value.length
+  const needed = effectiveHandSize.value - hand.value.length
   if (needed > 0) {
     hand.value.push(...drawCards(needed))
     scheduleReorderAfterDeal(needed)
@@ -1093,7 +1099,7 @@ onMounted(() => {
             <div>
               <h2 class="blind-select-title">选择盲注</h2>
               <div class="blind-select-chips">
-                <span class="chip-tag muted">底注 {{ currentAnte }}/8</span>
+                <span class="chip-tag muted">底注 {{ currentAnte }}/{{ TOTAL_ANTES }}</span>
                 <span class="chip-tag muted">第 {{ currentBlind + 1 }} 回合</span>
               </div>
             </div>
@@ -1243,7 +1249,7 @@ onMounted(() => {
             {{ gameWon ? '挑战胜利' : '挑战失败' }}
           </h2>
           <p class="gameover-sub">
-            {{ gameWon ? '击败全部 8 层底注' : `你未能击败 ${blind.name}` }}
+            {{ gameWon ? `击败全部 ${TOTAL_ANTES} 层底注` : `你未能击败 ${blind.name}` }}
           </p>
           <div class="gameover-stats">
             <div class="gameover-stat">
@@ -1301,7 +1307,7 @@ onMounted(() => {
             </div>
             <div class="hud-meta-item">
               <span class="hud-meta-label">底注</span>
-              <span class="hud-meta-val">{{ currentAnte }}/8</span>
+              <span class="hud-meta-val">{{ currentAnte }}/{{ TOTAL_ANTES }}</span>
             </div>
             <div class="hud-meta-item">
               <span class="hud-meta-label">手数</span>
