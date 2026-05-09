@@ -4,6 +4,7 @@ import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
+import gsap from 'gsap'
 import { burstParticles, burstJokerParticles, flyToTable } from './utils/animation.js'
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
@@ -343,42 +344,95 @@ function drawCards(count) {
 }
 
 function dealCards() {
+  // 先发牌：新牌按发牌顺序进入手牌（不立即排序），等入场动画结束再触发理牌
   hand.value = drawCards(HAND_SIZE)
-  applyHandSort()
+  scheduleReorderAfterDeal(HAND_SIZE)
 }
 
 const currentSortMode = ref('rank') // 'rank' | 'suit'
 
-function applyHandSort() {
+function getSortedHand(cards) {
   if (currentSortMode.value === 'suit') {
     const suitOrder = { hearts: 0, diamonds: 1, clubs: 2, spades: 3 }
-    hand.value = [...hand.value].sort((a, b) => {
+    return [...cards].sort((a, b) => {
       if (suitOrder[a.suit] !== suitOrder[b.suit]) {
         return suitOrder[a.suit] - suitOrder[b.suit]
       }
       return a.rank - b.rank
     })
-  } else {
-    hand.value = [...hand.value].sort((a, b) => b.rank - a.rank)
   }
+  return [...cards].sort((a, b) => b.rank - a.rank)
+}
+
+/**
+ * 用 FLIP 思路把手牌从当前 DOM 位置滑到排序后的目标位置：
+ * 1) 记录每张牌的当前位置
+ * 2) 应用排序（数据层重排）
+ * 3) nextTick 后用 gsap.fromTo 让每张牌从旧位置滑动到新位置
+ */
+async function reorderHand() {
+  const oldRectsById = new Map()
+  hand.value.forEach((card, i) => {
+    const el = handCardRefs.value[i]?.cardRef
+    if (el) oldRectsById.set(card.id, el.getBoundingClientRect())
+  })
+
+  const sorted = getSortedHand(hand.value)
+  const sameOrder = sorted.every((c, i) => c.id === hand.value[i]?.id)
+  if (sameOrder) return
+  hand.value = sorted
+
+  await nextTick()
+
+  hand.value.forEach((card, i) => {
+    const el = handCardRefs.value[i]?.cardRef
+    const oldRect = oldRectsById.get(card.id)
+    if (!el || !oldRect) return
+    const newRect = el.getBoundingClientRect()
+    const dx = oldRect.left - newRect.left
+    const dy = oldRect.top - newRect.top
+    if (dx === 0 && dy === 0) return
+    gsap.fromTo(
+      el,
+      { x: dx, y: dy },
+      {
+        x: 0,
+        y: 0,
+        duration: 0.45,
+        ease: 'power3.out',
+        clearProps: 'transform'
+      }
+    )
+  })
+}
+
+/**
+ * 估算新牌入场动画结束时间，然后触发理牌。
+ * 入场 stagger 80ms / duration 550ms（见 PlayingCard onMounted）。
+ */
+function scheduleReorderAfterDeal(newCardCount) {
+  const totalEnterMs = Math.max(0, newCardCount - 1) * 80 + 550 + 60
+  setTimeout(() => {
+    reorderHand()
+  }, totalEnterMs)
 }
 
 function sortHandByRank() {
   currentSortMode.value = 'rank'
-  applyHandSort()
+  reorderHand()
 }
 
 function sortHandBySuit() {
   currentSortMode.value = 'suit'
-  applyHandSort()
+  reorderHand()
 }
 
 function refillHand() {
   const needed = HAND_SIZE - hand.value.length
   if (needed > 0) {
     hand.value.push(...drawCards(needed))
+    scheduleReorderAfterDeal(needed)
   }
-  applyHandSort()
 }
 
 function toggleCard(card) {
