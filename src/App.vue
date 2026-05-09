@@ -384,24 +384,32 @@ function getSortedHand(cards) {
   return [...cards].sort((a, b) => b.rank - a.rank)
 }
 
+const isReorderingHand = ref(false)
+
 /**
  * 用 FLIP 思路把手牌从当前 DOM 位置滑到排序后的目标位置：
  * 1) 记录每张牌的当前位置
  * 2) 应用排序（数据层重排）
  * 3) nextTick 后用 gsap.fromTo 让每张牌从旧位置滑动到新位置
+ *
+ * 全程 power2.out 0.35s，与 PlayingCard 入场（power2.out 0.4s）
+ * 共享同一动画语言，让发牌→理牌的衔接连续。
  */
 async function reorderHand() {
+  if (isReorderingHand.value) return
+  const sorted = getSortedHand(hand.value)
+  const sameOrder = sorted.every((c, i) => c.id === hand.value[i]?.id)
+  if (sameOrder) return
+
+  isReorderingHand.value = true
+
   const oldRectsById = new Map()
   hand.value.forEach((card, i) => {
     const el = handCardRefs.value[i]?.cardRef
     if (el) oldRectsById.set(card.id, el.getBoundingClientRect())
   })
 
-  const sorted = getSortedHand(hand.value)
-  const sameOrder = sorted.every((c, i) => c.id === hand.value[i]?.id)
-  if (sameOrder) return
   hand.value = sorted
-
   await nextTick()
 
   hand.value.forEach((card, i) => {
@@ -418,20 +426,25 @@ async function reorderHand() {
       {
         x: 0,
         y: 0,
-        duration: 0.45,
-        ease: 'power3.out',
+        duration: 0.35,
+        ease: 'power2.out',
         clearProps: 'transform'
       }
     )
   })
+
+  setTimeout(() => {
+    isReorderingHand.value = false
+  }, 360)
 }
 
 /**
- * 估算新牌入场动画结束时间，然后触发理牌。
- * 入场 stagger 80ms / duration 550ms（见 PlayingCard onMounted）。
+ * 入场结束时机 = (newCardCount-1)×60 stagger + 400 duration。
+ * 不再额外等 60ms 缓冲，让"发完"和"开始理"零间隙衔接，
+ * 避免出现"先静止再突然滑动"的不连贯感。
  */
 function scheduleReorderAfterDeal(newCardCount) {
-  const totalEnterMs = Math.max(0, newCardCount - 1) * 80 + 550 + 60
+  const totalEnterMs = Math.max(0, newCardCount - 1) * 60 + 400
   setTimeout(() => {
     reorderHand()
   }, totalEnterMs)
