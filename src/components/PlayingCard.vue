@@ -69,7 +69,6 @@ const cardClasses = computed(() => {
     </div>
 
     <div v-if="selectable && !selected" class="selection-ring"></div>
-    <div v-if="selected" class="selected-badge">已选</div>
 
     <div class="corner top-left">
       <div class="rank">{{ displayRank }}</div>
@@ -160,21 +159,6 @@ const cardClasses = computed(() => {
   z-index: 1;
 }
 
-.selected-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 3;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #fde68a, #f59e0b);
-  padding: 4px 10px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  color: #2a1700;
-  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.4);
-  border: 2px solid #2a1700;
-}
 
 .corner {
   position: absolute;
@@ -238,11 +222,16 @@ const cardClasses = computed(() => {
 
 .glow-effect {
   position: absolute;
-  inset: -6px;
-  background: radial-gradient(circle, rgba(255, 209, 102, 0.35) 0%, transparent 70%);
-  border-radius: 16px;
+  inset: -10px;
+  background: radial-gradient(ellipse, rgba(255, 209, 102, 0.5) 0%, rgba(255, 209, 102, 0.15) 50%, transparent 75%);
+  border-radius: 18px;
   pointer-events: none;
   z-index: -1;
+  animation: glow-pulse 1.8s ease-in-out infinite;
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 
 /* Compact */

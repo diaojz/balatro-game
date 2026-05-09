@@ -11,9 +11,9 @@ export const HAND_TYPES = {
   STRAIGHT_FLUSH: { name: '同花顺', chips: 100, mult: 8, level: 9 }
 }
 
-// 识别牌型
+// 识别牌型（支持 1-5 张牌）
 export function identifyHand(cards) {
-  if (cards.length !== 5) {
+  if (cards.length === 0) {
     return HAND_TYPES.HIGH_CARD
   }
 
@@ -38,23 +38,24 @@ export function identifyHand(cards) {
     isStraight = sortedRanks.every((r, i) => r === lowAceStraight[i])
   }
 
-  // 4. 判定牌型
+  // 4. 判定牌型（同花和顺子需要恰好 5 张牌）
   const countValues = Object.values(counts).sort((a, b) => b - a)
+  const isFullHand = cards.length === 5
 
   // 同花顺
-  if (isFlush && isStraight) return HAND_TYPES.STRAIGHT_FLUSH
+  if (isFullHand && isFlush && isStraight) return HAND_TYPES.STRAIGHT_FLUSH
 
   // 四条
   if (countValues[0] === 4) return HAND_TYPES.FOUR_KIND
 
   // 葫芦
-  if (countValues[0] === 3 && countValues[1] === 2) return HAND_TYPES.FULL_HOUSE
+  if (isFullHand && countValues[0] === 3 && countValues[1] === 2) return HAND_TYPES.FULL_HOUSE
 
   // 同花
-  if (isFlush) return HAND_TYPES.FLUSH
+  if (isFullHand && isFlush) return HAND_TYPES.FLUSH
 
   // 顺子
-  if (isStraight) return HAND_TYPES.STRAIGHT
+  if (isFullHand && isStraight) return HAND_TYPES.STRAIGHT
 
   // 三条
   if (countValues[0] === 3) return HAND_TYPES.THREE_KIND

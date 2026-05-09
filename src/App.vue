@@ -109,33 +109,25 @@ const availableBlindOptions = computed(() => {
 })
 const selectedCards = computed(() => hand.value.filter(card => card.selected))
 const selectedCardCount = computed(() => selectedCards.value.length)
-const cardsNeededToPlay = computed(() => Math.max(0, 5 - selectedCardCount.value))
-const canPlaySelectedCards = computed(() => selectedCardCount.value === 5)
+const canPlaySelectedCards = computed(() => selectedCardCount.value >= 1 && selectedCardCount.value <= 5)
 const selectionStatus = computed(() => {
   if (canPlaySelectedCards.value) {
+    const preview = identifyHand(selectedCards.value)
     return {
       tone: 'ready',
-      title: '已满足出牌条件',
-      description: '当前已选满 5 张，可以直接出牌。'
-    }
-  }
-
-  if (selectedCardCount.value === 0) {
-    return {
-      tone: 'idle',
-      title: '尚未选择手牌',
-      description: '请从下方手牌中选择 5 张组成牌型。'
+      title: `${preview.name}`,
+      description: `已选 ${selectedCardCount.value} 张，可直接出牌。`
     }
   }
 
   return {
-    tone: 'building',
-    title: `还差 ${cardsNeededToPlay.value} 张可出牌`,
-    description: `当前已选 ${selectedCardCount.value} / 5 张，继续补足手牌后再出牌。`
+    tone: 'idle',
+    title: '尚未选择手牌',
+    description: '从下方手牌中选择 1-5 张组成牌型。'
   }
 })
 const selectedScorePreview = computed(() => {
-  if (!canPlaySelectedCards.value) {
+  if (selectedCardCount.value === 0) {
     return { handType: null, score: 0 }
   }
 
@@ -342,7 +334,7 @@ function dealCards() {
 }
 
 function sortHandByRank() {
-  hand.value = [...hand.value].sort((a, b) => a.rank - b.rank)
+  hand.value = [...hand.value].sort((a, b) => b.rank - a.rank)
 }
 
 function sortHandBySuit() {
@@ -362,6 +354,10 @@ function sortHandBySuit() {
 }
 
 function toggleCard(card) {
+  if (!card.selected && selectedCardCount.value >= 5) {
+    showToastMessage('最多只能选择 5 张牌', 'warning')
+    return
+  }
   card.selected = !card.selected
 }
 
@@ -370,11 +366,6 @@ function playHand() {
 
   if (selected.length === 0) {
     showToastMessage('请先选择牌', 'warning')
-    return
-  }
-
-  if (selected.length !== 5) {
-    showToastMessage(`请选择 5 张牌（当前已选 ${selected.length} 张）`, 'warning')
     return
   }
 
@@ -926,7 +917,7 @@ onMounted(() => {
             </span>
           </div>
           <div v-else class="play-table-idle">
-            <span class="play-table-placeholder">选择 5 张手牌组成牌型</span>
+            <span class="play-table-placeholder">选择手牌组成牌型（1-5 张）</span>
           </div>
         </div>
 
@@ -934,9 +925,8 @@ onMounted(() => {
         <div class="hand-area">
           <div class="hand-area-header">
             <span class="hand-area-label">
-              手牌 · 已选 {{ selectedCardCount }} / 5
-              <span v-if="selectionStatus.tone === 'ready'" class="hand-ready">可出牌</span>
-              <span v-else-if="selectionStatus.tone === 'building'" class="hand-building">继续选牌</span>
+              手牌 · 已选 {{ selectedCardCount }} 张
+              <span v-if="selectionStatus.tone === 'ready'" class="hand-ready">· {{ selectionStatus.title }}</span>
             </span>
             <div class="hand-area-sorts">
               <button @click="sortHandByRank" class="btn-sort">按点数</button>
@@ -954,8 +944,9 @@ onMounted(() => {
               compact
               @click="toggleCard(card)"
               :style="{
-                transform: `translateX(${(index - (hand.length - 1) / 2) * 62}px) translateY(${card.selected ? -34 : Math.abs(index - (hand.length - 1) / 2) * 6}px) rotate(${(index - (hand.length - 1) / 2) * 4}deg)`,
-                zIndex: card.selected ? 80 + index : index + 1
+                marginLeft: index === 0 ? '0' : '-8px',
+                transform: card.selected ? 'translateY(-28px)' : 'none',
+                zIndex: card.selected ? 60 : index
               }"
               class="hand-card"
             />
@@ -970,7 +961,7 @@ onMounted(() => {
             class="btn-primary"
             :class="{ disabled: !canPlaySelectedCards }"
           >
-            {{ canPlaySelectedCards ? '出牌' : `还差 ${cardsNeededToPlay} 张` }}
+            {{ canPlaySelectedCards ? '出牌' : '请先选牌' }}
           </button>
           <button
             @click="discardCards"
@@ -1990,19 +1981,15 @@ onMounted(() => {
   gap: 6px;
 }
 .hand-fan {
-  position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding: 8px 0 4px;
-  min-height: 140px;
+  padding: 12px 0 4px;
+  min-height: 150px;
 }
 .hand-card {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform-origin: bottom center;
-  margin-left: -48px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease, margin 0.18s ease;
 }
 
 /* Bottom bar */
