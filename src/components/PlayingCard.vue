@@ -70,7 +70,8 @@ onMounted(() => {
     opacity: 0,
     duration: 0.5,
     delay: props.dealIndex * 0.06,
-    ease: 'back.out(1.4)'
+    ease: 'back.out(1.4)',
+    clearProps: 'transform,opacity'
   })
 })
 

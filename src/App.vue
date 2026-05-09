@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
+import { burstParticles } from './utils/animation.js'
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
+import ScoreCounter from './components/ScoreCounter.vue'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -51,6 +53,8 @@ const ownedJokers = ref([])
 const maxJokers = 5
 const HAND_SIZE = 8
 const shopJokers = ref([])
+const triggeredJokerIds = ref([])
+const shimmeringJokerIds = ref([])
 const toastMessage = ref('')
 const toastType = ref('info')
 const showToast = ref(false)
@@ -378,6 +382,19 @@ function toggleCard(card) {
   card.selected = !card.selected
 }
 
+function triggerJokerSequence() {
+  triggeredJokerIds.value = []
+  const jokers = ownedJokers.value
+  jokers.forEach((joker, idx) => {
+    setTimeout(() => {
+      triggeredJokerIds.value = [...triggeredJokerIds.value, joker.id]
+      setTimeout(() => {
+        triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== joker.id)
+      }, 600)
+    }, idx * 200)
+  })
+}
+
 function playHand() {
   const selected = selectedCards.value
 
@@ -399,6 +416,7 @@ function playHand() {
   discardPile.value.push(...selected.map(card => ({ ...card, selected: false })))
   hand.value = hand.value.filter(card => !card.selected)
   showToastMessage(`${handType.name} +${score} 分！`, 'success')
+  triggerJokerSequence()
 
   setTimeout(() => {
     showPlayedCards.value = false
@@ -439,6 +457,10 @@ function passBlind() {
   completedBlindIds.value = [...new Set([...completedBlindIds.value, blind.value.id])]
   showToastMessage(`通过 ${blind.value.name}！获得 $${blind.value.reward}`, 'success')
 
+  if (blind.value.type === 'boss') {
+    burstParticles(36)
+  }
+
   if (currentBlind.value < BLINDS.length - 1) {
     setTimeout(() => {
       openShop()
@@ -476,6 +498,21 @@ function openShop() {
     shopJokers.value.push(getRandomJoker())
   }
   setRunPhase(RUN_PHASES.SHOP)
+  triggerShopShimmer()
+}
+
+function triggerShopShimmer() {
+  const ids = shopJokers.value
+    .filter(j => j.rarity === 'rare' || j.rarity === 'legendary')
+    .map(j => j.id)
+  if (ids.length === 0) return
+
+  nextTick(() => {
+    shimmeringJokerIds.value = ids
+    setTimeout(() => {
+      shimmeringJokerIds.value = []
+    }, 900)
+  })
 }
 
 function rerollShop() {
@@ -586,6 +623,16 @@ onMounted(() => {
 
 <template>
   <div class="balatro-shell">
+    <!-- 牌型弹出 banner -->
+    <Transition name="hand-type-pop">
+      <div
+        v-if="showPlayedCards && lastPlayedHand"
+        class="hand-type-banner"
+      >
+        {{ lastPlayedHand.name }}
+      </div>
+    </Transition>
+
     <!-- Toast -->
     <Transition name="toast">
       <div
@@ -805,7 +852,12 @@ onMounted(() => {
                 :class="{ unavailable: !joker.canBuy }"
               >
                 <div class="shop-item-art-wrap">
-                  <JokerCard :joker="joker" size="shop" :show-tooltip="false" />
+                  <JokerCard
+                    :joker="joker"
+                    size="shop"
+                    :show-tooltip="false"
+                    :shimmering="shimmeringJokerIds.includes(joker.id)"
+                  />
                 </div>
                 <div class="shop-item-bottom">
                   <span class="shop-item-price">$ {{ joker.price }}</span>
@@ -946,7 +998,7 @@ onMounted(() => {
                 :style="{ width: `${Math.min((totalScore / blind.targetScore) * 100, 100)}%` }"
               ></div>
             </div>
-            <span class="hud-progress-text">{{ totalScore }} / {{ blind.targetScore }}</span>
+            <span class="hud-progress-text"><ScoreCounter :value="totalScore" /> / {{ blind.targetScore }}</span>
           </div>
         </div>
 
@@ -959,6 +1011,7 @@ onMounted(() => {
               :key="joker.id"
               :joker="joker"
               size="normal"
+              :triggering="triggeredJokerIds.includes(joker.id)"
             />
             <JokerCard
               v-for="slot in maxJokers - ownedJokers.length"
@@ -975,14 +1028,15 @@ onMounted(() => {
             <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
             <div class="play-table-cards">
               <PlayingCard
-                v-for="card in playedCards"
+                v-for="(card, index) in playedCards"
                 :key="card.id"
                 :card="card"
                 :selected="false"
+                :deal-index="index"
                 compact
               />
             </div>
-            <p class="play-table-score">+ {{ lastScore }}</p>
+            <p class="play-table-score">+ <ScoreCounter :value="lastScore" /></p>
           </div>
           <div v-else-if="selectedCardCount > 0" class="play-table-preview">
             <p class="play-table-placeholder">出牌预览</p>
@@ -1024,6 +1078,7 @@ onMounted(() => {
               :card="card"
               :selected="card.selected"
               :selectable="true"
+              :deal-index="index"
               compact
               @click="toggleCard(card)"
               :style="{
