@@ -18,6 +18,14 @@ const props = defineProps({
   showTooltip: {
     type: Boolean,
     default: true
+  },
+  triggering: {
+    type: Boolean,
+    default: false
+  },
+  shimmering: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -41,7 +49,7 @@ const artType = computed(() => props.joker?.art || 'jimbo')
   <div
     v-else
     class="joker-card"
-    :class="[`size-${size}`, `rarity-${joker.rarity}`]"
+    :class="[`size-${size}`, `rarity-${joker.rarity}`, { triggering, shimmering }]"
     :style="{ '--rarity': rarityColor }"
     @click="$emit('click', joker)"
   >

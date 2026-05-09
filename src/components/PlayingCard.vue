@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import gsap from 'gsap'
 
 const props = defineProps({
   card: {
@@ -17,6 +18,10 @@ const props = defineProps({
   compact: {
     type: Boolean,
     default: false
+  },
+  dealIndex: {
+    type: Number,
+    default: 0
   }
 })
 
@@ -55,13 +60,25 @@ const cardClasses = computed(() => {
     { 'selectable': props.selectable }
   ]
 })
+
+const cardRef = ref(null)
+
+onMounted(() => {
+  if (!cardRef.value) return
+  gsap.from(cardRef.value, {
+    x: 200,
+    opacity: 0,
+    duration: 0.5,
+    delay: props.dealIndex * 0.06,
+    ease: 'back.out(1.4)'
+  })
+})
+
+defineExpose({ cardRef })
 </script>
 
 <template>
-  <div
-    :class="cardClasses"
-    @click="emit('click', card)"
-  >
+  <div :class="cardClasses" @click="emit('click', card)" ref="cardRef">
     <div class="card-border"></div>
 
     <div class="card-bg">
