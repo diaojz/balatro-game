@@ -476,21 +476,51 @@ async function playHand() {
   const events = buildScoreSequence(selected, handType, ownedJokers.value)
   const finalEvent = events[events.length - 1]
   const selectedSnapshot = [...selected]
+  const selectedIds = new Set(selectedSnapshot.map(c => c.id))
 
   isResolvingHand.value = true
   handsLeft.value--
   lastPlayedHand.value = handType
+  lastScore.value = 0
   triggeredJokerIds.value = []
+  showPlayedCards.value = true // 触发 banner 弹出
 
-  // 1) FLIP 飞动：已选牌从手牌位置飞到 .play-table 中央
+  // 1) 让已选牌就地 transform 飞到 .play-table 中央
+  // 关键：不销毁 hand 中的 DOM，全程同一组元素承担"飞 → 计分 → 淡出"
   const targetEl = playTableRef.value
+  const flyingByCardId = new Map()
   if (targetEl) {
+    const orderedSelected = hand.value.filter(c => selectedIds.has(c.id))
+    const cardWidth = 88 // PlayingCard.compact 宽度
+    const gap = 12
+    const totalWidth = orderedSelected.length * cardWidth + (orderedSelected.length - 1) * gap
+    const startOffsetX = -totalWidth / 2 + cardWidth / 2
+
     hand.value.forEach((card, idx) => {
-      if (!card.selected) return
+      if (!selectedIds.has(card.id)) return
       const el = handCardRefs.value[idx]?.cardRef
-      if (el) flyToTable(el, targetEl, { delay: idx * 0.05, duration: 0.5 })
+      if (!el) return
+      flyingByCardId.set(card.id, el)
+
+      const orderIdx = orderedSelected.findIndex(c => c.id === card.id)
+      const src = el.getBoundingClientRect()
+      const dst = targetEl.getBoundingClientRect()
+      const dstCx = dst.left + dst.width / 2 + startOffsetX + orderIdx * (cardWidth + gap)
+      const dstCy = dst.top + dst.height / 2
+      const dx = dstCx - (src.left + src.width / 2)
+      const dy = dstCy - (src.top + src.height / 2)
+
+      el.style.zIndex = '120'
+      gsap.to(el, {
+        x: dx,
+        y: dy,
+        scale: 1.05,
+        duration: 0.5,
+        ease: 'power2.out',
+        delay: orderIdx * 0.04
+      })
     })
-    await wait(560)
+    await wait(540)
     targetEl.classList.add('impact')
     setTimeout(() => targetEl.classList.remove('impact'), 460)
   }
@@ -500,31 +530,25 @@ async function playHand() {
   shell?.classList.add('screen-shake')
   setTimeout(() => shell?.classList.remove('screen-shake'), 360)
 
-  // 3) 桌面渲染已打出牌 + 牌型 banner，从手牌移除
-  playedCards.value = [...selectedSnapshot]
-  showPlayedCards.value = true
-  playedCardRefs.value = []
-  discardPile.value.push(...selectedSnapshot.map(c => ({ ...c, selected: false })))
-  hand.value = hand.value.filter(c => !selectedSnapshot.find(s => s.id === c.id))
-  await wait(620) // 等 banner 弹出 + 桌面 PlayingCard 入场
-
-  // 4) 按事件序列逐步累加
+  // 3) base：HUD chips/mult 重置为牌型基础值
   const baseEvent = events[0]
   battleChips.value = baseEvent.chips
   battleMult.value = baseEvent.mult
-  await wait(380)
+  await wait(280)
 
+  // 4) 逐张牌 / 逐张 Joker 检验
   for (let i = 1; i < events.length - 1; i++) {
     const ev = events[i]
     if (ev.type === 'card') {
-      const cardIdx = playedCards.value.findIndex(c => c.id === ev.card.id)
-      const el = playedCardRefs.value[cardIdx]?.cardRef
+      const el = flyingByCardId.get(ev.card.id)
       if (el) {
-        gsap.fromTo(
-          el,
-          { y: 0 },
-          { y: -18, duration: 0.16, ease: 'power2.out', yoyo: true, repeat: 1 }
-        )
+        gsap.to(el, {
+          y: '-=18',
+          duration: 0.18,
+          ease: 'power2.out',
+          yoyo: true,
+          repeat: 1
+        })
         floatNumber(el, `+${ev.chipsDelta}`, {
           color: '#5ac8fa',
           glow: 'rgba(90,200,250,0.85)',
@@ -532,7 +556,7 @@ async function playHand() {
         })
       }
       battleChips.value = ev.totalChips
-      await wait(280)
+      await wait(220)
     } else if (ev.type === 'joker') {
       const jokerId = ev.joker.id
       triggeredJokerIds.value = [...triggeredJokerIds.value, jokerId]
@@ -557,7 +581,7 @@ async function playHand() {
       }
       battleChips.value = ev.totalChips
       battleMult.value = ev.totalMult
-      await wait(380)
+      await wait(320)
       triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== jokerId)
     }
   }
@@ -567,12 +591,24 @@ async function playHand() {
   showScoreFloat.value = true
   totalScore.value += finalEvent.score
   showToastMessage(`${handType.name} +${finalEvent.score} 分！`, 'success')
-  await wait(900)
+  await wait(680)
 
-  // 6) 清场
+  // 6) 飞行牌就地淡出（全程同一 DOM，不再有"突然出现"）
+  flyingByCardId.forEach(el => {
+    gsap.to(el, {
+      opacity: 0,
+      scale: 0.85,
+      duration: 0.28,
+      ease: 'power2.in'
+    })
+  })
+  await wait(280)
+
+  // 7) 真正从 hand 移除并清场
+  discardPile.value.push(...selectedSnapshot.map(c => ({ ...c, selected: false })))
+  hand.value = hand.value.filter(c => !selectedIds.has(c.id))
   showPlayedCards.value = false
   showScoreFloat.value = false
-  playedCards.value = []
   isResolvingHand.value = false
 
   if (totalScore.value >= blind.value.targetScore) {
@@ -1189,20 +1225,9 @@ onMounted(() => {
 
         <!-- 出牌预览区 -->
         <div class="play-table" ref="playTableRef">
-          <div v-if="showPlayedCards && playedCards.length > 0" class="play-table-scored">
+          <div v-if="isResolvingHand" class="play-table-scored">
             <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
-            <div class="play-table-cards">
-              <PlayingCard
-                v-for="(card, index) in playedCards"
-                :ref="(el) => setPlayedCardRef(el, index)"
-                :key="card.id"
-                :card="card"
-                :selected="false"
-                :deal-index="index"
-                compact
-              />
-            </div>
-            <p class="play-table-score">+ <ScoreCounter :value="lastScore" /></p>
+            <p v-if="lastScore > 0" class="play-table-score">+ <ScoreCounter :value="lastScore" /></p>
           </div>
           <div v-else-if="selectedCardCount > 0" class="play-table-preview">
             <p class="play-table-placeholder">已选 {{ selectedCardCount }} 张 · 等待出牌</p>
