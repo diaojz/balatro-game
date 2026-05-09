@@ -5,7 +5,14 @@ import { calculateScore, buildScoreSequence } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
 import gsap from 'gsap'
-import { burstParticles, burstJokerParticles, flyToTable, floatNumber } from './utils/animation.js'
+import {
+  burstParticles,
+  burstJokerParticles,
+  flyToTable,
+  floatNumber,
+  flyToHud,
+  pulseHudCol
+} from './utils/animation.js'
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
 import ScoreCounter from './components/ScoreCounter.vue'
@@ -59,6 +66,8 @@ const shimmeringJokerIds = ref([])
 const handCardRefs = ref([])
 const playedCardRefs = ref([])
 const playTableRef = ref(null)
+const hudChipsRef = ref(null)
+const hudMultRef = ref(null)
 const showScoreFloat = ref(false)
 const isResolvingHand = ref(false)
 const battleChips = ref(0)
@@ -1223,13 +1232,13 @@ onMounted(() => {
 
           <!-- 筹码 × 倍率 -->
           <div class="hud-score" :class="{ 'is-resolving': isResolvingHand }">
-            <div class="hud-score-col chips">
+            <div class="hud-score-col chips" ref="hudChipsRef">
               <span class="hud-score-val chips-color">
                 <ScoreCounter :value="displayChips" :duration="0.4" />
               </span>
               <span class="hud-score-label">筹码</span>
             </div>
-            <div class="hud-score-col mult">
+            <div class="hud-score-col mult" ref="hudMultRef">
               <span class="hud-score-val mult-color">×<ScoreCounter :value="displayMult" :duration="0.4" /></span>
               <span class="hud-score-label">倍率</span>
             </div>

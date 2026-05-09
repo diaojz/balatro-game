@@ -106,6 +106,84 @@ export function floatNumber(anchorEl, text, options = {}) {
 }
 
 /**
+ * 把一个数字 / 文字从 srcEl 抛物线飞到 hudColEl 中心，
+ * 到达时调用 onArrive（一般用于触发 HUD 框脉冲 + 数值跳变）。
+ * 整段动画约 0.55s。
+ */
+export function flyToHud(srcEl, hudColEl, text, options = {}) {
+  if (!srcEl || !hudColEl) {
+    if (options.onArrive) options.onArrive()
+    return
+  }
+  const src = srcEl.getBoundingClientRect()
+  const dst = hudColEl.getBoundingClientRect()
+  const startX = src.left + src.width / 2
+  const startY = src.top - 4
+  const endX = dst.left + dst.width / 2
+  const endY = dst.top + dst.height / 2
+
+  const node = document.createElement('div')
+  node.className = 'fly-to-hud'
+  node.textContent = text
+  node.style.cssText = `
+    position: fixed;
+    left: ${startX}px;
+    top: ${startY}px;
+    color: ${options.color ?? '#ffd166'};
+    font-family: 'Press Start 2P', monospace;
+    font-size: ${options.size ?? 26}px;
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 175;
+    text-shadow:
+      -2px 0 0 #2a1c33,
+      2px 0 0 #2a1c33,
+      0 -2px 0 #2a1c33,
+      0 2px 0 #2a1c33,
+      0 0 14px ${options.glow ?? 'rgba(255,209,102,0.85)'};
+    letter-spacing: 1px;
+    white-space: nowrap;
+    will-change: left, top, transform, opacity;
+  `
+  document.body.appendChild(node)
+  gsap.set(node, { xPercent: -50, yPercent: -50, scale: 0.5 })
+
+  const duration = options.duration ?? 0.55
+  const tl = gsap.timeline({
+    onComplete: () => {
+      if (options.onArrive) options.onArrive()
+      node.remove()
+    }
+  })
+  tl.to(node, { scale: 1.1, duration: 0.18, ease: 'back.out(2)' })
+  tl.to(
+    node,
+    {
+      left: endX,
+      top: endY,
+      scale: 0.75,
+      opacity: 0.9,
+      duration,
+      ease: 'power2.in'
+    },
+    '+=0.05'
+  )
+  tl.to(node, { opacity: 0, duration: 0.1 }, '-=0.05')
+}
+
+/**
+ * 给 HUD 列添加 .receiving class 触发"接收脉冲"动画，0.4s 后自动移除。
+ */
+export function pulseHudCol(hudColEl) {
+  if (!hudColEl) return
+  hudColEl.classList.remove('receiving')
+  // 强制 reflow 让 animation 能再次触发
+  void hudColEl.offsetWidth
+  hudColEl.classList.add('receiving')
+  setTimeout(() => hudColEl.classList.remove('receiving'), 420)
+}
+
+/**
  * Joker 触发时，从指定 DOM 元素（卡牌）位置飞溅出少量金色粒子。
  * 0.7s 内消失，DOM 自动清理。
  */

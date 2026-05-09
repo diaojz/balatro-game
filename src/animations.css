@@ -194,6 +194,81 @@
   filter: drop-shadow(0 0 6px rgba(255,209,102,0.9));
 }
 
+/* ========== (j) HUD 接收脉冲（飘字飞达时触发） ========== */
+.hud-score-col.receiving {
+  animation: hud-receive 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes hud-receive {
+  0%   { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  35%  { transform: scale(1.18); filter: drop-shadow(0 0 18px var(--gold)) brightness(1.3); }
+  70%  { transform: scale(1.04); filter: drop-shadow(0 0 8px var(--gold)) brightness(1.1); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+}
+
+/* ========== (k) final 公式爆炸（chips × mult = score） ========== */
+.final-formula {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Press Start 2P', monospace;
+  font-weight: 900;
+  pointer-events: none;
+  z-index: 155;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 16px;
+  white-space: nowrap;
+  filter: drop-shadow(0 6px 18px rgba(0,0,0,0.7));
+}
+.final-formula .ff-chips {
+  color: var(--chips);
+  font-size: 56px;
+  text-shadow:
+    -2px 0 0 #2a1c33, 2px 0 0 #2a1c33,
+    0 -2px 0 #2a1c33, 0 2px 0 #2a1c33,
+    0 0 22px rgba(90,200,250,0.9);
+}
+.final-formula .ff-mult {
+  color: var(--mult);
+  font-size: 56px;
+  text-shadow:
+    -2px 0 0 #2a1c33, 2px 0 0 #2a1c33,
+    0 -2px 0 #2a1c33, 0 2px 0 #2a1c33,
+    0 0 22px rgba(255,94,126,0.9);
+}
+.final-formula .ff-op {
+  color: var(--text-dim);
+  font-size: 40px;
+}
+.final-formula .ff-score {
+  color: var(--gold);
+  font-size: 76px;
+  letter-spacing: 2px;
+  text-shadow:
+    -3px 0 0 #6b3fa0, 3px 0 0 #6b3fa0,
+    0 -3px 0 #6b3fa0, 0 3px 0 #6b3fa0,
+    0 6px 0 #2a1c33,
+    0 0 28px rgba(255,209,102,0.9),
+    0 0 48px rgba(255,150,40,0.7);
+}
+.final-formula-enter-active {
+  animation: final-formula-pop 0.6s cubic-bezier(0.34, 1.8, 0.64, 1);
+}
+.final-formula-leave-active {
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+.final-formula-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(1.08);
+}
+@keyframes final-formula-pop {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  45%  { transform: translate(-50%, -50%) scale(1.18); opacity: 1; }
+  75%  { transform: translate(-50%, -50%) scale(0.96); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
 /* ========== (i) prefers-reduced-motion 总开关 ========== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
