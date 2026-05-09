@@ -79,6 +79,21 @@ const battleChips = ref(0)
 const battleMult = ref(1)
 const showFinalFormula = ref(false)
 const finalFormula = ref({ chips: 0, mult: 1, score: 0 })
+
+// 本 ante 历史（用于 The Pillar 的 DEBUFF_PREVIOUS 与 The Ox 的 MOST_HAND_PENALTY）
+const antePlayedCardKeys = ref(new Set())
+const anteHandTypeCounts = ref({})
+const mostPlayedHandTypeKey = ref(null)
+
+function applyAntePillarDebuff(cards) {
+  if (blind.value?.bossRule?.key !== 'DEBUFF_PREVIOUS') return
+  cards.forEach(card => {
+    const key = `${card.rank}-${card.suit}`
+    if (antePlayedCardKeys.value.has(key)) {
+      card.debuffed = true
+    }
+  })
+}
 const toastMessage = ref('')
 
 function setHandCardRef(el, index) {
@@ -347,6 +362,9 @@ function initGame() {
   completedBlindIds.value = []
   selectedBlindId.value = null
   hand.value = []
+  antePlayedCardKeys.value = new Set()
+  anteHandTypeCounts.value = {}
+  mostPlayedHandTypeKey.value = null
   showBlindSelect()
 }
 
@@ -372,6 +390,22 @@ function selectBlind(blindId) {
 
   currentBlind.value = targetBlindIndex
   selectedBlindId.value = blindId
+
+  // 进入 boss 之前冻结 most-played handType，供 The Ox 使用
+  if (targetBlind.bossRule?.key === 'MOST_HAND_PENALTY') {
+    let max = 0
+    let topKey = null
+    Object.entries(anteHandTypeCounts.value).forEach(([k, v]) => {
+      if (v > max) {
+        max = v
+        topKey = k
+      }
+    })
+    mostPlayedHandTypeKey.value = topKey
+  } else {
+    mostPlayedHandTypeKey.value = null
+  }
+
   resetRound()
   dealCards()
   setRunPhase(RUN_PHASES.BATTLE)
@@ -391,7 +425,9 @@ function drawCards(count) {
 function dealCards() {
   // 先发牌：新牌按发牌顺序进入手牌（不立即排序），等入场动画结束再触发理牌
   const size = effectiveHandSize.value
-  hand.value = drawCards(size)
+  const newCards = drawCards(size)
+  applyAntePillarDebuff(newCards)
+  hand.value = newCards
   scheduleReorderAfterDeal(size)
 }
 
@@ -489,7 +525,9 @@ function sortHandBySuit() {
 function refillHand() {
   const needed = effectiveHandSize.value - hand.value.length
   if (needed > 0) {
-    hand.value.push(...drawCards(needed))
+    const newCards = drawCards(needed)
+    applyAntePillarDebuff(newCards)
+    hand.value.push(...newCards)
     scheduleReorderAfterDeal(needed)
   }
 }
@@ -763,6 +801,40 @@ async function playHand() {
     )
   })
 
+  // 8.5) Boss 后处理（按规则触发副作用）
+  // - 非 boss：累加 ante 历史，供下一关 The Pillar / The Ox 使用
+  if (blind.value.type !== 'boss') {
+    selectedSnapshot.forEach(card => {
+      antePlayedCardKeys.value.add(`${card.rank}-${card.suit}`)
+    })
+    anteHandTypeCounts.value = {
+      ...anteHandTypeCounts.value,
+      [handType.key]: (anteHandTypeCounts.value[handType.key] ?? 0) + 1
+    }
+  }
+  // - The Ox：本回合若打出 most-played handType，金钱归零
+  if (
+    blind.value.bossRule?.key === 'MOST_HAND_PENALTY' &&
+    mostPlayedHandTypeKey.value === handType.key &&
+    money.value > 0
+  ) {
+    money.value = 0
+    showToastMessage(`The Ox 触发：金钱清零！`, 'error')
+  }
+  // - The Hook：随机弃 2 张
+  if (blind.value.bossRule?.key === 'DRAW_2_DISCARD' && hand.value.length > 0) {
+    const drawCount = Math.min(2, hand.value.length)
+    const indices = []
+    while (indices.length < drawCount) {
+      const idx = Math.floor(Math.random() * hand.value.length)
+      if (!indices.includes(idx)) indices.push(idx)
+    }
+    const toDiscard = indices.map(i => hand.value[i])
+    hand.value = hand.value.filter((_, i) => !indices.includes(i))
+    discardPile.value.push(...toDiscard.map(c => ({ ...c, selected: false })))
+    showToastMessage(`The Hook 触发：随机弃 ${drawCount} 张`, 'warning')
+  }
+
   // 9) 清场
   showPlayedCards.value = false
   showScoreFloat.value = false
@@ -805,6 +877,10 @@ function passBlind() {
 
   if (blind.value.type === 'boss') {
     burstParticles(36)
+    // 进入下一 ante，重置 ante 历史
+    antePlayedCardKeys.value = new Set()
+    anteHandTypeCounts.value = {}
+    mostPlayedHandTypeKey.value = null
   }
 
   if (currentBlind.value < BLINDS.length - 1) {
