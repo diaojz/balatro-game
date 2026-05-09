@@ -138,11 +138,11 @@ const canPlaySelectedCards = computed(
 )
 const displayChips = computed(() => {
   if (isResolvingHand.value) return battleChips.value
-  return selectedScorePreview.value.handType?.chips ?? 0
+  return selectedScorePreview.value.totalChips ?? 0
 })
 const displayMult = computed(() => {
   if (isResolvingHand.value) return battleMult.value
-  return selectedScorePreview.value.handType?.mult ?? 1
+  return selectedScorePreview.value.totalMult ?? 1
 })
 const selectionStatus = computed(() => {
   if (canPlaySelectedCards.value) {
@@ -162,13 +162,17 @@ const selectionStatus = computed(() => {
 })
 const selectedScorePreview = computed(() => {
   if (selectedCardCount.value === 0) {
-    return { handType: null, score: 0 }
+    return { handType: null, totalChips: 0, totalMult: 1, score: 0 }
   }
 
   const handType = identifyHand(selectedCards.value)
+  const events = buildScoreSequence(selectedCards.value, handType, ownedJokers.value)
+  const finalEvent = events[events.length - 1]
   return {
     handType,
-    score: calculateScore(selectedCards.value, handType, ownedJokers.value)
+    totalChips: finalEvent.chips,
+    totalMult: finalEvent.mult,
+    score: finalEvent.score
   }
 })
 const drawPileCount = computed(() => deck.value.length)
@@ -1299,9 +1303,16 @@ onMounted(() => {
           </div>
           <div v-else-if="selectedCardCount > 0" class="play-table-preview">
             <p class="play-table-placeholder">已选 {{ selectedCardCount }} 张 · 等待出牌</p>
-            <span class="chip-tag purple" v-if="selectedScorePreview.handType">
-              {{ selectedScorePreview.handType.name }} · ≈{{ selectedScorePreview.score }}
-            </span>
+            <div v-if="selectedScorePreview.handType" class="preview-formula">
+              <span class="formula-hand-type">{{ selectedScorePreview.handType.name }}</span>
+              <span class="formula-row">
+                <span class="formula-chips">{{ selectedScorePreview.totalChips }}</span>
+                <span class="formula-op">×</span>
+                <span class="formula-mult">{{ selectedScorePreview.totalMult }}</span>
+                <span class="formula-op">=</span>
+                <span class="formula-score">{{ selectedScorePreview.score }}</span>
+              </span>
+            </div>
           </div>
           <div v-else class="play-table-idle">
             <span class="play-table-placeholder">选择手牌组成牌型（1-5 张）</span>
@@ -2336,6 +2347,45 @@ onMounted(() => {
   font-weight: 900;
   color: var(--muted);
   letter-spacing: 1px;
+}
+.preview-formula {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.formula-hand-type {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  color: var(--purple);
+  letter-spacing: 2px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.6);
+}
+.formula-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+  font-family: 'Press Start 2P', monospace;
+  font-weight: 900;
+}
+.formula-row .formula-chips {
+  color: var(--chips);
+  font-size: 30px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(90,200,250,0.55);
+}
+.formula-row .formula-mult {
+  color: var(--mult);
+  font-size: 30px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(255,94,126,0.55);
+}
+.formula-row .formula-score {
+  color: var(--gold);
+  font-size: 34px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 16px rgba(255,209,102,0.7);
+}
+.formula-row .formula-op {
+  color: var(--text-dim);
+  font-size: 22px;
 }
 .play-table-cards {
   display: flex;
