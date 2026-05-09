@@ -1,11 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { createDeck, identifyHand } from './utils/poker.js'
-import { calculateScore } from './utils/scoring.js'
+import { calculateScore, buildScoreSequence } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
 import gsap from 'gsap'
-import { burstParticles, burstJokerParticles, flyToTable } from './utils/animation.js'
+import { burstParticles, burstJokerParticles, flyToTable, floatNumber } from './utils/animation.js'
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
 import ScoreCounter from './components/ScoreCounter.vue'
@@ -57,12 +57,22 @@ const shopJokers = ref([])
 const triggeredJokerIds = ref([])
 const shimmeringJokerIds = ref([])
 const handCardRefs = ref([])
+const playedCardRefs = ref([])
 const playTableRef = ref(null)
 const showScoreFloat = ref(false)
+const isResolvingHand = ref(false)
+const battleChips = ref(0)
+const battleMult = ref(1)
 const toastMessage = ref('')
 
 function setHandCardRef(el, index) {
   handCardRefs.value[index] = el
+}
+function setPlayedCardRef(el, index) {
+  playedCardRefs.value[index] = el
+}
+function wait(ms) {
+  return new Promise(r => setTimeout(r, ms))
 }
 const toastType = ref('info')
 const showToast = ref(false)
@@ -123,7 +133,17 @@ const availableBlindOptions = computed(() => {
 })
 const selectedCards = computed(() => hand.value.filter(card => card.selected))
 const selectedCardCount = computed(() => selectedCards.value.length)
-const canPlaySelectedCards = computed(() => selectedCardCount.value >= 1 && selectedCardCount.value <= 5)
+const canPlaySelectedCards = computed(
+  () => !isResolvingHand.value && selectedCardCount.value >= 1 && selectedCardCount.value <= 5
+)
+const displayChips = computed(() => {
+  if (isResolvingHand.value) return battleChips.value
+  return selectedScorePreview.value.handType?.chips ?? 0
+})
+const displayMult = computed(() => {
+  if (isResolvingHand.value) return battleMult.value
+  return selectedScorePreview.value.handType?.mult ?? 1
+})
 const selectionStatus = computed(() => {
   if (canPlaySelectedCards.value) {
     const preview = identifyHand(selectedCards.value)
@@ -443,23 +463,8 @@ function toggleCard(card) {
   card.selected = !card.selected
 }
 
-function triggerJokerSequence() {
-  triggeredJokerIds.value = []
-  const jokers = ownedJokers.value
-  jokers.forEach((joker, idx) => {
-    setTimeout(() => {
-      triggeredJokerIds.value = [...triggeredJokerIds.value, joker.id]
-      const els = document.querySelectorAll('.joker-bar .joker-bar-row .joker-card:not(.empty)')
-      const el = els[idx]
-      if (el) burstJokerParticles(el, 6)
-      setTimeout(() => {
-        triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== joker.id)
-      }, 700)
-    }, idx * 220)
-  })
-}
-
 async function playHand() {
+  if (isResolvingHand.value) return
   const selected = selectedCards.value
 
   if (selected.length === 0) {
@@ -468,20 +473,24 @@ async function playHand() {
   }
 
   const handType = identifyHand(selected)
-  const score = calculateScore(selected, handType, ownedJokers.value)
+  const events = buildScoreSequence(selected, handType, ownedJokers.value)
+  const finalEvent = events[events.length - 1]
   const selectedSnapshot = [...selected]
 
-  // 1) FLIP 飞动：把已选牌从手牌位置飞到 .play-table 中央
+  isResolvingHand.value = true
+  handsLeft.value--
+  lastPlayedHand.value = handType
+  triggeredJokerIds.value = []
+
+  // 1) FLIP 飞动：已选牌从手牌位置飞到 .play-table 中央
   const targetEl = playTableRef.value
   if (targetEl) {
     hand.value.forEach((card, idx) => {
       if (!card.selected) return
       const el = handCardRefs.value[idx]?.cardRef
-      if (el) {
-        flyToTable(el, targetEl, { delay: idx * 0.05, duration: 0.5 })
-      }
+      if (el) flyToTable(el, targetEl, { delay: idx * 0.05, duration: 0.5 })
     })
-    await new Promise(r => setTimeout(r, 580))
+    await wait(560)
     targetEl.classList.add('impact')
     setTimeout(() => targetEl.classList.remove('impact'), 460)
   }
@@ -491,36 +500,92 @@ async function playHand() {
   shell?.classList.add('screen-shake')
   setTimeout(() => shell?.classList.remove('screen-shake'), 360)
 
-  // 3) 数据更新 + 中央 banner / score-float
+  // 3) 桌面渲染已打出牌 + 牌型 banner，从手牌移除
   playedCards.value = [...selectedSnapshot]
   showPlayedCards.value = true
-  showScoreFloat.value = true
-  totalScore.value += score
-  handsLeft.value--
-  lastPlayedHand.value = handType
-  lastScore.value = score
+  playedCardRefs.value = []
+  discardPile.value.push(...selectedSnapshot.map(c => ({ ...c, selected: false })))
+  hand.value = hand.value.filter(c => !selectedSnapshot.find(s => s.id === c.id))
+  await wait(620) // 等 banner 弹出 + 桌面 PlayingCard 入场
 
-  discardPile.value.push(...selectedSnapshot.map(card => ({ ...card, selected: false })))
-  hand.value = hand.value.filter(card => !selectedSnapshot.find(s => s.id === card.id))
-  showToastMessage(`${handType.name} +${score} 分！`, 'success')
-  triggerJokerSequence()
+  // 4) 按事件序列逐步累加
+  const baseEvent = events[0]
+  battleChips.value = baseEvent.chips
+  battleMult.value = baseEvent.mult
+  await wait(380)
 
-  setTimeout(() => {
-    showPlayedCards.value = false
-    showScoreFloat.value = false
-    playedCards.value = []
-
-    if (totalScore.value >= blind.value.targetScore) {
-      passBlind()
-    } else if (handsLeft.value === 0) {
-      failBlind()
-    } else {
-      refillHand()
+  for (let i = 1; i < events.length - 1; i++) {
+    const ev = events[i]
+    if (ev.type === 'card') {
+      const cardIdx = playedCards.value.findIndex(c => c.id === ev.card.id)
+      const el = playedCardRefs.value[cardIdx]?.cardRef
+      if (el) {
+        gsap.fromTo(
+          el,
+          { y: 0 },
+          { y: -18, duration: 0.16, ease: 'power2.out', yoyo: true, repeat: 1 }
+        )
+        floatNumber(el, `+${ev.chipsDelta}`, {
+          color: '#5ac8fa',
+          glow: 'rgba(90,200,250,0.85)',
+          size: 24
+        })
+      }
+      battleChips.value = ev.totalChips
+      await wait(280)
+    } else if (ev.type === 'joker') {
+      const jokerId = ev.joker.id
+      triggeredJokerIds.value = [...triggeredJokerIds.value, jokerId]
+      const jokerEls = document.querySelectorAll('.joker-bar .joker-bar-row .joker-card:not(.empty)')
+      const jokerEl = jokerEls[ev.jokerIndex]
+      if (jokerEl) {
+        burstJokerParticles(jokerEl, 8)
+        if (ev.chipsDelta) {
+          floatNumber(jokerEl, `+${ev.chipsDelta} 筹码`, {
+            color: '#5ac8fa',
+            glow: 'rgba(90,200,250,0.85)',
+            size: 18
+          })
+        }
+        if (ev.multDelta) {
+          floatNumber(jokerEl, `+${ev.multDelta} 倍率`, {
+            color: '#ff5e7e',
+            glow: 'rgba(255,94,126,0.85)',
+            size: 18
+          })
+        }
+      }
+      battleChips.value = ev.totalChips
+      battleMult.value = ev.totalMult
+      await wait(380)
+      triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== jokerId)
     }
-  }, 1800)
+  }
+
+  // 5) 最终结算
+  lastScore.value = finalEvent.score
+  showScoreFloat.value = true
+  totalScore.value += finalEvent.score
+  showToastMessage(`${handType.name} +${finalEvent.score} 分！`, 'success')
+  await wait(900)
+
+  // 6) 清场
+  showPlayedCards.value = false
+  showScoreFloat.value = false
+  playedCards.value = []
+  isResolvingHand.value = false
+
+  if (totalScore.value >= blind.value.targetScore) {
+    passBlind()
+  } else if (handsLeft.value === 0) {
+    failBlind()
+  } else {
+    refillHand()
+  }
 }
 
 function discardCards() {
+  if (isResolvingHand.value) return
   const selected = selectedCards.value
 
   if (selected.length === 0) {
@@ -1049,13 +1114,15 @@ onMounted(() => {
           </div>
 
           <!-- 筹码 × 倍率 -->
-          <div class="hud-score">
+          <div class="hud-score" :class="{ 'is-resolving': isResolvingHand }">
             <div class="hud-score-col chips">
-              <span class="hud-score-val chips-color">{{ selectedScorePreview.handType ? selectedScorePreview.handType.chips : 0 }}</span>
+              <span class="hud-score-val chips-color">
+                <ScoreCounter :value="displayChips" :duration="0.4" />
+              </span>
               <span class="hud-score-label">筹码</span>
             </div>
             <div class="hud-score-col mult">
-              <span class="hud-score-val mult-color">×{{ selectedScorePreview.handType ? selectedScorePreview.handType.mult : 1 }}</span>
+              <span class="hud-score-val mult-color">×<ScoreCounter :value="displayMult" :duration="0.4" /></span>
               <span class="hud-score-label">倍率</span>
             </div>
           </div>
@@ -1127,6 +1194,7 @@ onMounted(() => {
             <div class="play-table-cards">
               <PlayingCard
                 v-for="(card, index) in playedCards"
+                :ref="(el) => setPlayedCardRef(el, index)"
                 :key="card.id"
                 :card="card"
                 :selected="false"
@@ -1193,9 +1261,9 @@ onMounted(() => {
           </button>
           <button
             @click="discardCards"
-            :disabled="discardsLeft === 0 || selectedCardCount === 0"
+            :disabled="isResolvingHand || discardsLeft === 0 || selectedCardCount === 0"
             class="btn-warn"
-            :class="{ disabled: discardsLeft === 0 || selectedCardCount === 0 }"
+            :class="{ disabled: isResolvingHand || discardsLeft === 0 || selectedCardCount === 0 }"
           >
             弃牌
           </button>
