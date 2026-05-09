@@ -4,15 +4,14 @@ import { getCardValue } from './poker.js'
 export function calculateScore(cards, handType, jokers = []) {
   const state = {
     chips: handType.chips,
-    mult: handType.mult
+    mult: handType.mult,
+    jokerCount: jokers.length
   }
 
-  // 加上牌点数
   cards.forEach(card => {
     state.chips += getCardValue(card.rank)
   })
 
-  // 应用小丑牌效果（第二节课实现）
   jokers.forEach(joker => {
     if (joker.effect) {
       joker.effect(cards, handType, state)

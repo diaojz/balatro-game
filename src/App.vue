@@ -3,8 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
-import { getRandomJoker, getRarityColor, getRarityBgColor } from './config/jokers.js'
+import { getRandomJoker } from './config/jokers.js'
 import PlayingCard from './components/PlayingCard.vue'
+import JokerCard from './components/JokerCard.vue'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -48,6 +49,7 @@ const playedCards = ref([])
 const showPlayedCards = ref(false)
 const ownedJokers = ref([])
 const maxJokers = 5
+const HAND_SIZE = 8
 const shopJokers = ref([])
 const toastMessage = ref('')
 const toastType = ref('info')
@@ -330,27 +332,42 @@ function drawCards(count) {
 }
 
 function dealCards() {
-  hand.value = drawCards(8)
+  hand.value = drawCards(HAND_SIZE)
+  applyHandSort()
+}
+
+const currentSortMode = ref('rank') // 'rank' | 'suit'
+
+function applyHandSort() {
+  if (currentSortMode.value === 'suit') {
+    const suitOrder = { hearts: 0, diamonds: 1, clubs: 2, spades: 3 }
+    hand.value = [...hand.value].sort((a, b) => {
+      if (suitOrder[a.suit] !== suitOrder[b.suit]) {
+        return suitOrder[a.suit] - suitOrder[b.suit]
+      }
+      return a.rank - b.rank
+    })
+  } else {
+    hand.value = [...hand.value].sort((a, b) => b.rank - a.rank)
+  }
 }
 
 function sortHandByRank() {
-  hand.value = [...hand.value].sort((a, b) => b.rank - a.rank)
+  currentSortMode.value = 'rank'
+  applyHandSort()
 }
 
 function sortHandBySuit() {
-  const suitOrder = {
-    hearts: 0,
-    diamonds: 1,
-    clubs: 2,
-    spades: 3
-  }
+  currentSortMode.value = 'suit'
+  applyHandSort()
+}
 
-  hand.value = [...hand.value].sort((a, b) => {
-    if (suitOrder[a.suit] !== suitOrder[b.suit]) {
-      return suitOrder[a.suit] - suitOrder[b.suit]
-    }
-    return a.rank - b.rank
-  })
+function refillHand() {
+  const needed = HAND_SIZE - hand.value.length
+  if (needed > 0) {
+    hand.value.push(...drawCards(needed))
+  }
+  applyHandSort()
 }
 
 function toggleCard(card) {
@@ -392,7 +409,7 @@ function playHand() {
     } else if (handsLeft.value === 0) {
       failBlind()
     } else {
-      dealCards()
+      refillHand()
     }
   }, 3000)
 }
@@ -412,7 +429,7 @@ function discardCards() {
 
   discardPile.value.push(...selected.map(card => ({ ...card, selected: false })))
   hand.value = hand.value.filter(card => !card.selected)
-  hand.value.push(...drawCards(selected.length))
+  refillHand()
   discardsLeft.value--
   showToastMessage(`已弃掉 ${selected.length} 张牌`, 'info')
 }
@@ -512,6 +529,51 @@ function sellJoker(joker) {
   showToastMessage(`出售了 ${joker.name}，获得 $${sellPrice}`, 'info')
 }
 
+const confirmDialog = ref({
+  visible: false,
+  title: '',
+  message: '',
+  confirmLabel: '确认',
+  cancelLabel: '取消',
+  tone: 'danger',
+  onConfirm: null
+})
+
+function openConfirm(opts) {
+  confirmDialog.value = {
+    visible: true,
+    title: opts.title || '请确认',
+    message: opts.message || '',
+    confirmLabel: opts.confirmLabel || '确认',
+    cancelLabel: opts.cancelLabel || '取消',
+    tone: opts.tone || 'danger',
+    onConfirm: opts.onConfirm || null
+  }
+}
+
+function closeConfirm() {
+  confirmDialog.value.visible = false
+  confirmDialog.value.onConfirm = null
+}
+
+function handleConfirm() {
+  const fn = confirmDialog.value.onConfirm
+  closeConfirm()
+  if (typeof fn === 'function') fn()
+}
+
+function requestSellJoker(joker) {
+  const sellPrice = Math.floor(joker.price / 2)
+  openConfirm({
+    title: '出售小丑牌？',
+    message: `确认要出售「${joker.name}」吗？将获得 $${sellPrice}。`,
+    confirmLabel: `出售 · $${sellPrice}`,
+    cancelLabel: '再想想',
+    tone: 'danger',
+    onConfirm: () => sellJoker(joker)
+  })
+}
+
 function restart() {
   setRunPhase(RUN_PHASES.SETUP)
   initGame()
@@ -537,6 +599,32 @@ onMounted(() => {
         }"
       >
         {{ toastMessage }}
+      </div>
+    </Transition>
+
+    <!-- Confirm Dialog -->
+    <Transition name="fade">
+      <div
+        v-if="confirmDialog.visible"
+        class="confirm-overlay"
+        @click.self="closeConfirm"
+      >
+        <div class="confirm-panel" :class="`confirm-tone-${confirmDialog.tone}`">
+          <h3 class="confirm-title">{{ confirmDialog.title }}</h3>
+          <p class="confirm-message">{{ confirmDialog.message }}</p>
+          <div class="confirm-actions">
+            <button class="btn-ghost-lg" @click="closeConfirm">
+              {{ confirmDialog.cancelLabel }}
+            </button>
+            <button
+              class="btn-confirm"
+              :class="`tone-${confirmDialog.tone}`"
+              @click="handleConfirm"
+            >
+              {{ confirmDialog.confirmLabel }}
+            </button>
+          </div>
+        </div>
       </div>
     </Transition>
 
@@ -716,9 +804,9 @@ onMounted(() => {
                 class="shop-item-card"
                 :class="{ unavailable: !joker.canBuy }"
               >
-                <div class="shop-item-art">J</div>
-                <h3 class="shop-item-name">{{ joker.name }}</h3>
-                <p class="shop-item-desc">{{ joker.description }}</p>
+                <div class="shop-item-art-wrap">
+                  <JokerCard :joker="joker" size="shop" :show-tooltip="false" />
+                </div>
                 <div class="shop-item-bottom">
                   <span class="shop-item-price">$ {{ joker.price }}</span>
                   <button
@@ -735,24 +823,21 @@ onMounted(() => {
           </div>
 
           <div class="shop-owned">
-            <p class="shop-section-label">已拥有 · {{ ownedJokers.length }} / {{ maxJokers }}</p>
+            <p class="shop-section-label">已拥有 · {{ ownedJokers.length }} / {{ maxJokers }}（点击卡片可出售）</p>
             <div class="shop-owned-row">
-              <div
+              <JokerCard
                 v-for="joker in ownedJokers"
                 :key="joker.id"
-                class="joker-card-sm"
-                :class="getRarityBgColor(joker.rarity)"
-              >
-                <span class="joker-card-sm-emoji">🃏</span>
-                <span class="joker-card-sm-name">{{ joker.name }}</span>
-              </div>
-              <div
+                :joker="joker"
+                size="normal"
+                @click="requestSellJoker(joker)"
+              />
+              <JokerCard
                 v-for="slot in maxJokers - ownedJokers.length"
                 :key="'empty-' + slot"
-                class="joker-card-sm empty-joker"
-              >
-                <span>+</span>
-              </div>
+                :empty="true"
+                size="normal"
+              />
             </div>
           </div>
 
@@ -867,22 +952,20 @@ onMounted(() => {
 
         <!-- Joker 区 -->
         <div class="joker-bar">
-          <div
-            v-for="joker in ownedJokers"
-            :key="joker.id"
-            class="joker-chip"
-            :class="getRarityBgColor(joker.rarity)"
-          >
-            <span class="joker-chip-face">🃏</span>
-            <span class="joker-chip-name">{{ joker.name }}</span>
-          </div>
-          <div
-            v-for="slot in maxJokers - ownedJokers.length"
-            :key="'joker-slot-' + slot"
-            class="joker-chip empty"
-          >
-            <span class="joker-chip-face">+</span>
-            <span>空位</span>
+          <div class="joker-bar-label">JOKERS · {{ ownedJokers.length }}/{{ maxJokers }}</div>
+          <div class="joker-bar-row">
+            <JokerCard
+              v-for="joker in ownedJokers"
+              :key="joker.id"
+              :joker="joker"
+              size="normal"
+            />
+            <JokerCard
+              v-for="slot in maxJokers - ownedJokers.length"
+              :key="'joker-slot-' + slot"
+              :empty="true"
+              size="normal"
+            />
           </div>
         </div>
 
@@ -1063,6 +1146,77 @@ onMounted(() => {
 .toast--success { background: #62d18b; color: #0a1a24; }
 .toast--error   { background: #ef476f; color: #fff; }
 .toast--warning { background: #ffc857; color: #2a1700; }
+
+/* =====================================================
+   Confirm Dialog
+   ===================================================== */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 4, 16, 0.78);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.confirm-panel {
+  width: min(440px, 92vw);
+  background: linear-gradient(180deg, var(--panel) 0%, #160a23 100%);
+  border: 2px solid var(--line);
+  border-radius: 18px;
+  padding: 28px 26px 22px;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6);
+}
+.confirm-tone-danger {
+  border-color: rgba(239, 71, 111, 0.55);
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 71, 111, 0.2);
+}
+.confirm-tone-warning {
+  border-color: rgba(255, 200, 87, 0.5);
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(255, 200, 87, 0.2);
+}
+.confirm-title {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+.confirm-tone-danger .confirm-title { color: var(--red); }
+.confirm-message {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin-bottom: 22px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn-confirm {
+  padding: 10px 22px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.btn-confirm:hover { transform: translateY(-1px); filter: brightness(1.08); }
+.btn-confirm:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45); }
+.btn-confirm.tone-danger {
+  background: linear-gradient(180deg, #ff6b8b, #d6234a);
+}
+.btn-confirm.tone-warning {
+  background: linear-gradient(180deg, #ffd166, #f08a3a);
+  color: #2a1700;
+}
 
 /* =====================================================
    Phase Panel (shared)
@@ -1554,48 +1708,36 @@ onMounted(() => {
 }
 .shop-items {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
 }
 .shop-item-card {
   border-radius: 18px;
   background: linear-gradient(180deg, var(--panel-2), #14091f);
   border: 2px solid var(--line);
-  padding: 18px;
+  padding: 20px 16px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
   box-shadow: 0 12px 24px rgba(0,0,0,.45);
 }
 .shop-item-card.unavailable {
   opacity: 0.6;
 }
-.shop-item-art {
-  height: 100px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffd57a, #f08a3a);
-  display: grid;
-  place-items: center;
-  font-size: 2rem;
-  font-weight: 900;
-  color: #2a1700;
-  border: 2px solid #1a1024;
-}
-.shop-item-name {
-  font-size: 14px;
-  font-weight: 900;
-  letter-spacing: 1px;
-}
-.shop-item-desc {
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--text-dim);
+.shop-item-art-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 4px 0;
 }
 .shop-item-bottom {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
   margin-top: auto;
+  gap: 12px;
 }
 .shop-item-price {
   font-size: 14px;
@@ -1611,37 +1753,7 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
 }
-.joker-card-sm {
-  width: 80px;
-  height: 100px;
-  border-radius: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 2px solid #1a1024;
-  box-shadow: 0 5px 0 rgba(0,0,0,.45);
-  font-size: 10px;
-  font-weight: 900;
-  text-align: center;
-  background: linear-gradient(180deg, #ffd57a, #f08a3a);
-  color: #2a1700;
-}
-.joker-card-sm.empty-joker {
-  background: repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, rgba(255,255,255,.08) 6px 12px);
-  color: var(--muted);
-  border: 2px dashed rgba(255,255,255,.18);
-  box-shadow: none;
-}
-.joker-card-sm-emoji {
-  font-size: 24px;
-}
-.joker-card-sm-name {
-  font-size: 9px;
-  letter-spacing: 1px;
-  line-height: 1.1;
-}
+/* shop-owned-row 现在直接渲染 JokerCard 组件，旧的 .joker-card-sm 已废弃 */
 
 /* =====================================================
    GAME OVER
@@ -1864,46 +1976,32 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-/* Joker bar */
+/* Joker bar (战斗中持有的 Joker) */
 .joker-bar {
   display: flex;
-  gap: 8px;
-  padding: 8px;
-  background: linear-gradient(180deg, #14091f, #0a0414);
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  background:
+    linear-gradient(180deg, #1f1130 0%, #14091f 60%, #0a0414 100%);
   border: 2px solid var(--line);
   border-radius: 14px;
   align-self: flex-start;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 4px 12px rgba(0,0,0,.4);
 }
-.joker-chip {
-  width: 78px;
-  height: 100px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #ffd57a, #f08a3a);
-  color: #2a1700;
-  border: 2px solid #1a1024;
+.joker-bar-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: var(--gold);
+  letter-spacing: 2px;
+  text-shadow: 1px 1px 0 #000;
+}
+.joker-bar-row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-size: 9px;
-  font-weight: 900;
-  text-align: center;
-  box-shadow: 0 5px 0 rgba(0,0,0,.45);
-}
-.joker-chip.empty {
-  background: repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, rgba(255,255,255,.08) 6px 12px);
-  color: var(--muted);
-  border: 2px dashed rgba(255,255,255,.18);
-  box-shadow: none;
-}
-.joker-chip-face {
-  font-size: 26px;
-}
-.joker-chip-name {
-  font-size: 9px;
-  letter-spacing: 1px;
-  line-height: 1.1;
+  gap: 8px;
+  align-items: flex-end;
 }
 
 /* Play table */
