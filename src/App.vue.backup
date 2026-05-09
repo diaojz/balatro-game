@@ -1,10 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { createDeck, identifyHand, getCardDisplay, getSuitSymbol, getSuitColor } from './utils/poker.js'
+import PlayingCard from './components/PlayingCard.vue'
+import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker, getRarityColor, getRarityBgColor } from './config/jokers.js'
-import PlayingCard from './components/PlayingCard.vue'
 
 // 游戏状态
 const deck = ref([])
@@ -19,10 +19,6 @@ const gameWon = ref(false)
 const lastPlayedHand = ref(null)
 const lastScore = ref(0)
 
-// 已打出的牌展示
-const playedCards = ref([])
-const showPlayedCards = ref(false)
-
 // 小丑牌系统
 const ownedJokers = ref([])
 const maxJokers = 5
@@ -31,27 +27,11 @@ const maxJokers = 5
 const showShop = ref(false)
 const shopJokers = ref([])
 
-// Toast 提示系统
-const toastMessage = ref('')
-const toastType = ref('info') // 'info' | 'success' | 'error' | 'warning'
-const showToast = ref(false)
-
 // 当前盲注信息
 const blind = computed(() => BLINDS[currentBlind.value])
 
 // 选中的牌
 const selectedCards = computed(() => hand.value.filter(c => c.selected))
-
-// Toast 提示函数
-function showToastMessage(message, type = 'info') {
-  toastMessage.value = message
-  toastType.value = type
-  showToast.value = true
-
-  setTimeout(() => {
-    showToast.value = false
-  }, 3000)
-}
 
 // 初始化游戏
 function initGame() {
@@ -91,13 +71,8 @@ function toggleCard(card) {
 function playHand() {
   const selected = selectedCards.value
 
-  if (selected.length === 0) {
-    showToastMessage('请先选择牌', 'warning')
-    return
-  }
-
   if (selected.length !== 5) {
-    showToastMessage(`请选择 5 张牌（当前已选 ${selected.length} 张）`, 'warning')
+    alert('请选择 5 张牌')
     return
   }
 
@@ -107,34 +82,21 @@ function playHand() {
   // 计算得分（包含小丑牌加成）
   const score = calculateScore(selected, handType, ownedJokers.value)
 
-  // 保存已打出的牌并展示
-  playedCards.value = [...selected]
-  showPlayedCards.value = true
-
   // 更新状态
   totalScore.value += score
   handsLeft.value--
   lastPlayedHand.value = handType
   lastScore.value = score
 
-  // 显示得分提示
-  showToastMessage(`${handType.name} +${score} 分！`, 'success')
-
-  // 1.5 秒后隐藏已打出的牌，并继续游戏流程
-  setTimeout(() => {
-    showPlayedCards.value = false
-    playedCards.value = []
-
-    // 检查是否通过盲注
-    if (totalScore.value >= blind.value.targetScore) {
-      passBlind()
-    } else if (handsLeft.value === 0) {
-      failBlind()
-    } else {
-      // 重新发牌
-      dealCards()
-    }
-  }, 1500)
+  // 检查是否通过盲注
+  if (totalScore.value >= blind.value.targetScore) {
+    passBlind()
+  } else if (handsLeft.value === 0) {
+    failBlind()
+  } else {
+    // 重新发牌
+    dealCards()
+  }
 }
 
 // 弃牌
@@ -142,12 +104,12 @@ function discardCards() {
   const selected = selectedCards.value
 
   if (selected.length === 0) {
-    showToastMessage('请选择要弃掉的牌', 'warning')
+    alert('请选择要弃掉的牌')
     return
   }
 
   if (discardsLeft.value === 0) {
-    showToastMessage('弃牌次数已用完', 'error')
+    alert('弃牌次数已用完')
     return
   }
 
@@ -168,34 +130,25 @@ function discardCards() {
   }
 
   discardsLeft.value--
-  showToastMessage(`已弃掉 ${selected.length} 张牌`, 'info')
 }
 
 // 通过盲注
 function passBlind() {
   money.value += blind.value.reward
-  showToastMessage(`🎉 通过 ${blind.value.name}！获得 $${blind.value.reward}`, 'success')
 
   if (currentBlind.value < BLINDS.length - 1) {
     // 打开商店
-    setTimeout(() => {
-      openShop()
-    }, 1000)
+    openShop()
   } else {
     // 游戏胜利
-    setTimeout(() => {
-      gameWon.value = true
-      gameOver.value = true
-    }, 1000)
+    gameWon.value = true
+    gameOver.value = true
   }
 }
 
 // 失败盲注
 function failBlind() {
-  showToastMessage(`💀 未能通过 ${blind.value.name}`, 'error')
-  setTimeout(() => {
-    gameOver.value = true
-  }, 1000)
+  gameOver.value = true
 }
 
 // 重置回合
@@ -227,19 +180,18 @@ function closeShop() {
 // 购买小丑牌
 function buyJoker(joker) {
   if (money.value < joker.price) {
-    showToastMessage('金币不足', 'error')
+    alert('金币不足')
     return
   }
 
   if (ownedJokers.value.length >= maxJokers) {
-    showToastMessage('小丑牌槽已满（最多 5 个）', 'warning')
+    alert('小丑牌槽已满（最多 5 个）')
     return
   }
 
   money.value -= joker.price
   ownedJokers.value.push({ ...joker })
   shopJokers.value = shopJokers.value.filter(j => j.id !== joker.id)
-  showToastMessage(`购买了 ${joker.name}`, 'success')
 }
 
 // 出售小丑牌
@@ -247,7 +199,6 @@ function sellJoker(joker) {
   const sellPrice = Math.floor(joker.price / 2)
   money.value += sellPrice
   ownedJokers.value = ownedJokers.value.filter(j => j !== joker)
-  showToastMessage(`出售了 ${joker.name}，获得 $${sellPrice}`, 'info')
 }
 
 // 重新开始
@@ -269,25 +220,8 @@ onMounted(() => {
         🃏 Balatro (小丑牌)
       </h1>
 
-      <!-- Toast 提示 -->
-      <Transition name="toast">
-        <div
-          v-if="showToast"
-          class="fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-bold text-lg max-w-md"
-          :class="{
-            'bg-blue-500': toastType === 'info',
-            'bg-green-500': toastType === 'success',
-            'bg-red-500': toastType === 'error',
-            'bg-yellow-500': toastType === 'warning'
-          }"
-        >
-          {{ toastMessage }}
-        </div>
-      </Transition>
-
       <!-- 商店界面 -->
-      <Transition name="fade" mode="out-in">
-        <div v-if="showShop" key="shop" class="bg-white/10 backdrop-blur-md rounded-xl p-8">
+      <div v-if="showShop" class="bg-white/10 backdrop-blur-md rounded-xl p-8">
         <h2 class="text-3xl font-bold text-white mb-6 text-center">🛒 商店</h2>
 
         <div class="mb-6 text-center">
@@ -360,7 +294,7 @@ onMounted(() => {
       </div>
 
       <!-- 游戏结束界面 -->
-      <div v-else-if="gameOver" key="gameover" class="bg-white/10 backdrop-blur-md rounded-xl p-8 text-center">
+      <div v-else-if="gameOver" class="bg-white/10 backdrop-blur-md rounded-xl p-8 text-center">
         <h2 class="text-3xl font-bold text-white mb-4">
           {{ gameWon ? '🎉 恭喜通关！' : '💀 游戏结束' }}
         </h2>
@@ -375,34 +309,14 @@ onMounted(() => {
       </div>
 
       <!-- 游戏主界面 -->
-      <div v-else key="game" class="flex flex-col lg:flex-row gap-6">
-        <!-- 小丑牌槽 (移动端在顶部，桌面端在左侧) -->
-        <div class="w-full lg:w-64 lg:flex-shrink-0">
-          <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 lg:sticky lg:top-4">
+      <div v-else class="flex gap-6">
+        <!-- 左侧：小丑牌槽 -->
+        <div class="w-64 flex-shrink-0">
+          <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 sticky top-4">
             <h3 class="text-xl font-bold text-white mb-4 text-center">
               小丑牌 ({{ ownedJokers.length }}/{{ maxJokers }})
             </h3>
-            <!-- 移动端横向滚动布局 -->
-            <div class="lg:hidden flex gap-3 overflow-x-auto pb-2">
-              <div
-                v-for="joker in ownedJokers"
-                :key="joker.id"
-                class="rounded-lg p-3 flex-shrink-0 w-48"
-                :class="getRarityBgColor(joker.rarity)"
-              >
-                <h4 class="text-sm font-bold text-white mb-1">{{ joker.name }}</h4>
-                <p class="text-white/80 text-xs">{{ joker.description }}</p>
-              </div>
-              <div
-                v-for="i in (maxJokers - ownedJokers.length)"
-                :key="'empty-' + i"
-                class="bg-white/5 rounded-lg p-3 h-16 flex items-center justify-center flex-shrink-0 w-48"
-              >
-                <span class="text-white/30 text-sm">空槽位</span>
-              </div>
-            </div>
-            <!-- 桌面端垂直布局 -->
-            <div class="hidden lg:block space-y-3">
+            <div class="space-y-3">
               <div
                 v-for="joker in ownedJokers"
                 :key="joker.id"
@@ -427,106 +341,85 @@ onMounted(() => {
         <div class="flex-1">
           <!-- 盲注信息 -->
           <div class="bg-white/10 backdrop-blur-md rounded-xl p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-3xl font-bold text-white">{{ blind.name }}</h2>
-              <div class="text-white text-sm">
-                关卡 {{ currentBlind + 1 }} / {{ BLINDS.length }}
+            <h2 class="text-3xl font-bold text-white mb-4">{{ blind.name }}</h2>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-white">
+              <div>
+                <p class="text-sm opacity-70">目标分数</p>
+                <p class="text-2xl font-bold">{{ blind.targetScore }}</p>
               </div>
-            </div>
-
-            <!-- 进度条 -->
-            <div class="mb-4">
-              <div class="flex justify-between text-white text-sm mb-2">
-                <span>进度</span>
-                <span>{{ totalScore }} / {{ blind.targetScore }}</span>
+              <div>
+                <p class="text-sm opacity-70">当前分数</p>
+                <p class="text-2xl font-bold" :class="totalScore >= blind.targetScore ? 'text-green-400' : ''">
+                  {{ totalScore }}
+                </p>
               </div>
-              <div class="w-full bg-white/20 rounded-full h-4 overflow-hidden">
-                <div
-                  class="h-full rounded-full transition-all duration-500"
-                  :class="totalScore >= blind.targetScore ? 'bg-green-500' : 'bg-blue-500'"
-                  :style="{ width: `${Math.min(100, (totalScore / blind.targetScore) * 100)}%` }"
-                ></div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-white">
               <div>
                 <p class="text-sm opacity-70">剩余手数</p>
-                <p class="text-2xl font-bold" :class="handsLeft <= 1 ? 'text-red-400' : ''">{{ handsLeft }}</p>
+                <p class="text-2xl font-bold">{{ handsLeft }}</p>
               </div>
               <div>
                 <p class="text-sm opacity-70">弃牌次数</p>
-                <p class="text-2xl font-bold" :class="discardsLeft === 0 ? 'text-gray-400' : ''">{{ discardsLeft }}</p>
+                <p class="text-2xl font-bold">{{ discardsLeft }}</p>
               </div>
               <div>
                 <p class="text-sm opacity-70">金币</p>
                 <p class="text-2xl font-bold text-yellow-400">${{ money }}</p>
               </div>
-              <div>
-                <p class="text-sm opacity-70">奖励</p>
-                <p class="text-2xl font-bold text-green-400">${{ blind.reward }}</p>
-              </div>
             </div>
           </div>
 
           <!-- 上一手牌型和得分 -->
-          <div v-if="lastPlayedHand" class="bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-md rounded-xl p-6 mb-6 text-center border-2 border-yellow-400/50 shadow-lg shadow-yellow-400/20">
-            <p class="text-white text-2xl">
-              上一手: <span class="font-bold text-yellow-400 text-3xl">{{ lastPlayedHand.name }}</span>
-              <span class="mx-4">|</span>
-              得分: <span class="font-bold text-green-400 text-3xl">{{ lastScore }}</span>
+          <div v-if="lastPlayedHand" class="bg-white/10 backdrop-blur-md rounded-xl p-4 mb-6 text-center">
+            <p class="text-white text-lg">
+              上一手: <span class="font-bold text-yellow-400">{{ lastPlayedHand.name }}</span>
+              得分: <span class="font-bold text-green-400">{{ lastScore }}</span>
             </p>
-          </div>
-
-          <!-- 已打出的牌展示区 -->
-          <div v-if="showPlayedCards" class="mb-6">
-            <h3 class="text-xl font-bold text-white mb-4 text-center animate-pulse">
-              已打出的牌
-            </h3>
-            <div class="flex flex-wrap gap-4 justify-center">
-              <div
-                v-for="card in playedCards"
-                :key="card.id"
-                class="animate-fade-in-up"
-              >
-                <PlayingCard
-                  :card="card"
-                  :selected="false"
-                />
-              </div>
-            </div>
           </div>
 
           <!-- 手牌区 -->
-          <div class="mb-6 bg-white/10 backdrop-blur-md rounded-xl p-6 min-h-[240px]">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-xl font-bold text-white">
-                手牌
-              </h3>
-              <div class="text-white text-sm">
-                <span v-if="selectedCards.length === 0" class="text-white/60">
-                  点击卡牌选择
-                </span>
-                <span v-else-if="selectedCards.length < 5" class="text-yellow-400">
-                  已选 {{ selectedCards.length }} 张
-                </span>
-                <span v-else class="text-green-400">
-                  ✓ 已选 5 张
-                </span>
-              </div>
-            </div>
+          <div class="mb-6">
+            <h3 class="text-xl font-bold text-white mb-4 text-center">
+              手牌 (选择 5 张牌出牌，或选择任意张数弃牌)
+            </h3>
             <div class="flex flex-wrap gap-4 justify-center">
-              <PlayingCard
+              <div
                 v-for="card in hand"
                 :key="card.id"
-                :card="card"
-                :selected="card.selected"
                 @click="toggleCard(card)"
-              />
+                class="w-20 h-28 md:w-24 md:h-36 bg-white rounded-lg shadow-xl cursor-pointer
+                       transition-all hover:scale-105 flex flex-col items-center justify-center
+                       relative"
+                :class="{
+                  'ring-4 ring-yellow-400 -translate-y-4': card.selected,
+                  'hover:shadow-2xl': !card.selected
+                }"
+              >
+                <!-- 左上角 -->
+                <div class="absolute top-1 left-1 text-center">
+                  <div class="text-lg md:text-2xl font-bold" :class="getSuitColor(card.suit)">
+                    {{ getCardDisplay(card.rank) }}
+                  </div>
+                  <div class="text-xl md:text-3xl" :class="getSuitColor(card.suit)">
+                    {{ getSuitSymbol(card.suit) }}
+                  </div>
+                </div>
+
+                <!-- 中间大符号 -->
+                <div class="text-4xl md:text-6xl" :class="getSuitColor(card.suit)">
+                  {{ getSuitSymbol(card.suit) }}
+                </div>
+
+                <!-- 右下角 -->
+                <div class="absolute bottom-1 right-1 text-center rotate-180">
+                  <div class="text-lg md:text-2xl font-bold" :class="getSuitColor(card.suit)">
+                    {{ getCardDisplay(card.rank) }}
+                  </div>
+                  <div class="text-xl md:text-3xl" :class="getSuitColor(card.suit)">
+                    {{ getSuitSymbol(card.suit) }}
+                  </div>
+                </div>
+              </div>
             </div>
-            <p class="text-white/60 text-sm text-center mt-4">
-              💡 提示：选择 5 张牌出牌，或选择任意张数弃牌换新牌
-            </p>
           </div>
 
           <!-- 操作按钮 -->
@@ -534,83 +427,26 @@ onMounted(() => {
             <button
               @click="playHand"
               :disabled="selectedCards.length !== 5"
-              class="bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none
-                     text-white px-12 py-6 rounded-xl text-2xl font-bold transition-all shadow-lg hover:shadow-xl"
+              class="bg-green-500 hover:bg-green-600 disabled:bg-gray-500 disabled:cursor-not-allowed
+                     text-white px-8 py-4 rounded-xl text-xl font-bold transition-colors"
             >
               出牌 ({{ selectedCards.length }}/5)
             </button>
             <button
               @click="discardCards"
               :disabled="discardsLeft === 0 || selectedCards.length === 0"
-              class="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none
-                     text-white px-12 py-6 rounded-xl text-2xl font-bold transition-all shadow-lg hover:shadow-xl"
+              class="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-500 disabled:cursor-not-allowed
+                     text-white px-8 py-4 rounded-xl text-xl font-bold transition-colors"
             >
               弃牌 ({{ discardsLeft }}/3)
             </button>
           </div>
         </div>
       </div>
-      </Transition>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* 已打出牌的淡入上移动画 */
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out;
-}
-
-/* Toast 提示动画 */
-.toast-enter-active {
-  animation: toast-in 0.3s ease-out;
-}
-
-.toast-leave-active {
-  animation: toast-out 0.3s ease-in;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
-/* 页面切换淡入淡出动画 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+/* 添加一些自定义样式 */
 </style>
