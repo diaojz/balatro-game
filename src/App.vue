@@ -182,7 +182,12 @@ const selectedScorePreview = computed(() => {
   }
 
   const handType = identifyHand(selectedCards.value)
-  const events = buildScoreSequence(selectedCards.value, handType, ownedJokers.value)
+  const events = buildScoreSequence(
+    selectedCards.value,
+    handType,
+    ownedJokers.value,
+    blind.value?.bossRule
+  )
   const finalEvent = events[events.length - 1]
   return {
     handType,
@@ -508,7 +513,7 @@ async function playHand() {
   }
 
   const handType = identifyHand(selected)
-  const events = buildScoreSequence(selected, handType, ownedJokers.value)
+  const events = buildScoreSequence(selected, handType, ownedJokers.value, blind.value?.bossRule)
   const finalEvent = events[events.length - 1]
   const selectedSnapshot = [...selected]
   const selectedIds = new Set(selectedSnapshot.map(c => c.id))
@@ -603,28 +608,45 @@ async function playHand() {
     const ev = events[i]
     if (ev.type === 'card') {
       const clone = cloneByCardId.get(ev.card.id)
-      if (clone) {
-        gsap.to(clone, {
-          y: '-=18',
-          duration: 0.2,
-          ease: 'power2.out',
-          yoyo: true,
-          repeat: 1
-        })
-        flyToHud(clone, hudChipsRef.value, `+${ev.chipsDelta}`, {
-          color: '#5ac8fa',
-          glow: 'rgba(90,200,250,0.85)',
-          size: 26,
-          duration: 0.5,
-          onArrive: () => {
-            pulseHudCol(hudChipsRef.value)
-            battleChips.value = ev.totalChips
-          }
-        })
+      if (ev.debuffed) {
+        if (clone) {
+          // 被 debuff 的牌：仅轻微抖动 + 灰字 DEBUFF，不向 HUD 飘
+          gsap.fromTo(
+            clone,
+            { x: '-=4' },
+            { x: '+=4', duration: 0.12, yoyo: true, repeat: 3, ease: 'power1.inOut', clearProps: 'x' }
+          )
+          floatNumber(clone, 'DEBUFF', {
+            color: '#8e7aa8',
+            glow: 'rgba(142,122,168,0.6)',
+            size: 18
+          })
+        }
+        await wait(300)
       } else {
-        battleChips.value = ev.totalChips
+        if (clone) {
+          gsap.to(clone, {
+            y: '-=18',
+            duration: 0.2,
+            ease: 'power2.out',
+            yoyo: true,
+            repeat: 1
+          })
+          flyToHud(clone, hudChipsRef.value, `+${ev.chipsDelta}`, {
+            color: '#5ac8fa',
+            glow: 'rgba(90,200,250,0.85)',
+            size: 26,
+            duration: 0.5,
+            onArrive: () => {
+              pulseHudCol(hudChipsRef.value)
+              battleChips.value = ev.totalChips
+            }
+          })
+        } else {
+          battleChips.value = ev.totalChips
+        }
+        await wait(400)
       }
-      await wait(400)
     } else if (ev.type === 'joker') {
       const jokerId = ev.joker.id
       triggeredJokerIds.value = [...triggeredJokerIds.value, jokerId]
