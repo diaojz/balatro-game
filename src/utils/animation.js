@@ -60,6 +60,52 @@ export function burstParticles(count = 30) {
 }
 
 /**
+ * 在指定锚点元素的头顶飘出一段数字 / 文字（用于 chips/mult 实时反馈）。
+ * 颜色 / 字号可定制；1s 内淡出消失，DOM 自动清理。
+ */
+export function floatNumber(anchorEl, text, options = {}) {
+  if (!anchorEl) return
+  const rect = anchorEl.getBoundingClientRect()
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top - 8
+
+  const node = document.createElement('div')
+  node.className = 'score-pop'
+  node.textContent = text
+  node.style.cssText = `
+    position: fixed;
+    left: ${cx}px;
+    top: ${cy}px;
+    transform: translate(-50%, -50%);
+    color: ${options.color ?? '#ffd166'};
+    font-family: 'Press Start 2P', monospace;
+    font-size: ${options.size ?? 22}px;
+    font-weight: 900;
+    pointer-events: none;
+    z-index: 170;
+    text-shadow:
+      -2px 0 0 #2a1c33,
+      2px 0 0 #2a1c33,
+      0 -2px 0 #2a1c33,
+      0 2px 0 #2a1c33,
+      0 0 14px ${options.glow ?? 'rgba(255,209,102,0.8)'};
+    letter-spacing: 1px;
+    white-space: nowrap;
+    will-change: transform, opacity;
+  `
+  document.body.appendChild(node)
+
+  const tl = gsap.timeline({ onComplete: () => node.remove() })
+  tl.fromTo(
+    node,
+    { y: 0, scale: 0.4, opacity: 0 },
+    { y: -18, scale: 1.3, opacity: 1, duration: 0.22, ease: 'back.out(2)' }
+  )
+  tl.to(node, { y: -38, scale: 1, duration: 0.22, ease: 'power2.out' })
+  tl.to(node, { y: -78, opacity: 0, duration: 0.5, ease: 'power2.in' })
+}
+
+/**
  * Joker 触发时，从指定 DOM 元素（卡牌）位置飞溅出少量金色粒子。
  * 0.7s 内消失，DOM 自动清理。
  */
