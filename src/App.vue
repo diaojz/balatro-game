@@ -469,6 +469,7 @@ function refillHand() {
 }
 
 function toggleCard(card) {
+  if (isResolvingHand.value || isReorderingHand.value) return
   if (!card.selected && selectedCardCount.value >= 5) {
     showToastMessage('最多只能选择 5 张牌', 'warning')
     return
@@ -496,35 +497,63 @@ async function playHand() {
   lastPlayedHand.value = handType
   lastScore.value = 0
   triggeredJokerIds.value = []
-  showPlayedCards.value = true // 触发 banner 弹出
+  showPlayedCards.value = true
 
-  // 1) 让已选牌就地 transform 飞到 .play-table 中央
-  // 关键：不销毁 hand 中的 DOM，全程同一组元素承担"飞 → 计分 → 淡出"
+  // 1) 给每张已选牌 cloneNode 副本，挂到 body 上 fixed 定位
+  //    原牌 visibility:hidden 保留占位（避免 hand-fan 立即 reflow）
+  //    副本完全脱离 Vue 响应式，GSAP 操作不会被 :style patch 覆盖
+  const orderedSelected = hand.value.filter(c => selectedIds.has(c.id))
+  const cloneByCardId = new Map()
+  const sourceElByCardId = new Map()
+
+  hand.value.forEach((card, idx) => {
+    if (!selectedIds.has(card.id)) return
+    const sourceEl = handCardRefs.value[idx]?.cardRef
+    if (!sourceEl) return
+    sourceElByCardId.set(card.id, sourceEl)
+
+    const rect = sourceEl.getBoundingClientRect()
+    const clone = sourceEl.cloneNode(true)
+    // 副本必须去掉 .selected：scoped CSS .playing-card.selected 自带
+    // transform: translateY(-22px)，会和 GSAP 的 inline transform 冲突跳变
+    clone.classList.remove('selected')
+    clone.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      margin: 0;
+      z-index: 120;
+      pointer-events: none;
+      will-change: transform, opacity;
+      transform: none;
+    `
+    document.body.appendChild(clone)
+    cloneByCardId.set(card.id, clone)
+
+    sourceEl.style.visibility = 'hidden'
+  })
+
+  // 2) 副本飞到桌面中央，按 selected 顺序错位排开
   const targetEl = playTableRef.value
-  const flyingByCardId = new Map()
   if (targetEl) {
-    const orderedSelected = hand.value.filter(c => selectedIds.has(c.id))
-    const cardWidth = 88 // PlayingCard.compact 宽度
-    const gap = 12
-    const totalWidth = orderedSelected.length * cardWidth + (orderedSelected.length - 1) * gap
-    const startOffsetX = -totalWidth / 2 + cardWidth / 2
+    const dst = targetEl.getBoundingClientRect()
+    const cardWidth = 88
+    const cardHeight = 124
+    const gap = 14
+    const totalWidth = orderedSelected.length * cardWidth + Math.max(0, orderedSelected.length - 1) * gap
+    const startLeft = dst.left + dst.width / 2 - totalWidth / 2
+    const targetTop = dst.top + dst.height / 2 - cardHeight / 2
 
-    hand.value.forEach((card, idx) => {
-      if (!selectedIds.has(card.id)) return
-      const el = handCardRefs.value[idx]?.cardRef
-      if (!el) return
-      flyingByCardId.set(card.id, el)
-
-      const orderIdx = orderedSelected.findIndex(c => c.id === card.id)
-      const src = el.getBoundingClientRect()
-      const dst = targetEl.getBoundingClientRect()
-      const dstCx = dst.left + dst.width / 2 + startOffsetX + orderIdx * (cardWidth + gap)
-      const dstCy = dst.top + dst.height / 2
-      const dx = dstCx - (src.left + src.width / 2)
-      const dy = dstCy - (src.top + src.height / 2)
-
-      el.style.zIndex = '120'
-      gsap.to(el, {
+    orderedSelected.forEach((card, orderIdx) => {
+      const clone = cloneByCardId.get(card.id)
+      if (!clone) return
+      const cloneRect = clone.getBoundingClientRect()
+      const targetLeft = startLeft + orderIdx * (cardWidth + gap)
+      const dx = targetLeft - cloneRect.left
+      const dy = targetTop - cloneRect.top
+      gsap.to(clone, {
         x: dx,
         y: dy,
         scale: 1.05,
@@ -533,36 +562,35 @@ async function playHand() {
         delay: orderIdx * 0.04
       })
     })
-    await wait(540)
+    await wait(560)
     targetEl.classList.add('impact')
     setTimeout(() => targetEl.classList.remove('impact'), 460)
   }
 
-  // 2) 全屏 screen-shake
+  // 3) screen-shake
   const shell = document.querySelector('.balatro-shell')
   shell?.classList.add('screen-shake')
   setTimeout(() => shell?.classList.remove('screen-shake'), 360)
 
-  // 3) base：HUD chips/mult 重置为牌型基础值
-  const baseEvent = events[0]
-  battleChips.value = baseEvent.chips
-  battleMult.value = baseEvent.mult
+  // 4) base：HUD 重置为牌型基础值
+  battleChips.value = events[0].chips
+  battleMult.value = events[0].mult
   await wait(280)
 
-  // 4) 逐张牌 / 逐张 Joker 检验
+  // 5) 逐事件检验
   for (let i = 1; i < events.length - 1; i++) {
     const ev = events[i]
     if (ev.type === 'card') {
-      const el = flyingByCardId.get(ev.card.id)
-      if (el) {
-        gsap.to(el, {
+      const clone = cloneByCardId.get(ev.card.id)
+      if (clone) {
+        gsap.to(clone, {
           y: '-=18',
           duration: 0.18,
           ease: 'power2.out',
           yoyo: true,
           repeat: 1
         })
-        floatNumber(el, `+${ev.chipsDelta}`, {
+        floatNumber(clone, `+${ev.chipsDelta}`, {
           color: '#5ac8fa',
           glow: 'rgba(90,200,250,0.85)',
           size: 24
@@ -599,27 +627,54 @@ async function playHand() {
     }
   }
 
-  // 5) 最终结算
+  // 6) final
   lastScore.value = finalEvent.score
   showScoreFloat.value = true
   totalScore.value += finalEvent.score
   showToastMessage(`${handType.name} +${finalEvent.score} 分！`, 'success')
   await wait(680)
 
-  // 6) 飞行牌就地淡出（全程同一 DOM，不再有"突然出现"）
-  flyingByCardId.forEach(el => {
-    gsap.to(el, {
+  // 7) 副本淡出（自销毁）
+  cloneByCardId.forEach(clone => {
+    gsap.to(clone, {
       opacity: 0,
       scale: 0.85,
       duration: 0.28,
-      ease: 'power2.in'
+      ease: 'power2.in',
+      onComplete: () => clone.remove()
     })
   })
-  await wait(280)
+  await wait(310)
 
-  // 7) 真正从 hand 移除并清场
+  // 8) snapshot 剩余牌位置 → 数据移除 → FLIP 紧凑过渡
+  const remainingCards = hand.value.filter(c => !selectedIds.has(c.id))
+  const oldRectsById = new Map()
+  remainingCards.forEach(card => {
+    const idx = hand.value.findIndex(c => c.id === card.id)
+    const el = handCardRefs.value[idx]?.cardRef
+    if (el) oldRectsById.set(card.id, el.getBoundingClientRect())
+  })
+
   discardPile.value.push(...selectedSnapshot.map(c => ({ ...c, selected: false })))
-  hand.value = hand.value.filter(c => !selectedIds.has(c.id))
+  hand.value = remainingCards
+  await nextTick()
+
+  hand.value.forEach((card, i) => {
+    const el = handCardRefs.value[i]?.cardRef
+    const oldRect = oldRectsById.get(card.id)
+    if (!el || !oldRect) return
+    const newRect = el.getBoundingClientRect()
+    const dx = oldRect.left - newRect.left
+    const dy = oldRect.top - newRect.top
+    if (dx === 0 && dy === 0) return
+    gsap.fromTo(
+      el,
+      { x: dx, y: dy },
+      { x: 0, y: 0, duration: 0.3, ease: 'power2.out', clearProps: 'transform' }
+    )
+  })
+
+  // 9) 清场
   showPlayedCards.value = false
   showScoreFloat.value = false
   isResolvingHand.value = false
