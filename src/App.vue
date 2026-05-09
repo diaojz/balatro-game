@@ -72,6 +72,8 @@ const showScoreFloat = ref(false)
 const isResolvingHand = ref(false)
 const battleChips = ref(0)
 const battleMult = ref(1)
+const showFinalFormula = ref(false)
+const finalFormula = ref({ chips: 0, mult: 1, score: 0 })
 const toastMessage = ref('')
 
 function setHandCardRef(el, index) {
@@ -588,9 +590,9 @@ async function playHand() {
   // 4) base：HUD 重置为牌型基础值
   battleChips.value = events[0].chips
   battleMult.value = events[0].mult
-  await wait(280)
+  await wait(360)
 
-  // 5) 逐事件检验
+  // 5) 逐事件检验：飘字飞向 HUD，HUD 接收脉冲，battleChips/Mult 在到达瞬间跳值
   for (let i = 1; i < events.length - 1; i++) {
     const ev = events[i]
     if (ev.type === 'card') {
@@ -598,54 +600,100 @@ async function playHand() {
       if (clone) {
         gsap.to(clone, {
           y: '-=18',
-          duration: 0.18,
+          duration: 0.2,
           ease: 'power2.out',
           yoyo: true,
           repeat: 1
         })
-        floatNumber(clone, `+${ev.chipsDelta}`, {
+        flyToHud(clone, hudChipsRef.value, `+${ev.chipsDelta}`, {
           color: '#5ac8fa',
           glow: 'rgba(90,200,250,0.85)',
-          size: 24
+          size: 26,
+          duration: 0.5,
+          onArrive: () => {
+            pulseHudCol(hudChipsRef.value)
+            battleChips.value = ev.totalChips
+          }
         })
+      } else {
+        battleChips.value = ev.totalChips
       }
-      battleChips.value = ev.totalChips
-      await wait(220)
+      await wait(400)
     } else if (ev.type === 'joker') {
       const jokerId = ev.joker.id
       triggeredJokerIds.value = [...triggeredJokerIds.value, jokerId]
       const jokerEls = document.querySelectorAll('.joker-bar .joker-bar-row .joker-card:not(.empty)')
       const jokerEl = jokerEls[ev.jokerIndex]
       if (jokerEl) {
-        burstJokerParticles(jokerEl, 8)
+        burstJokerParticles(jokerEl, 10)
         if (ev.chipsDelta) {
-          floatNumber(jokerEl, `+${ev.chipsDelta} 筹码`, {
+          flyToHud(jokerEl, hudChipsRef.value, `+${ev.chipsDelta}`, {
             color: '#5ac8fa',
             glow: 'rgba(90,200,250,0.85)',
-            size: 18
+            size: 26,
+            duration: 0.55,
+            onArrive: () => {
+              pulseHudCol(hudChipsRef.value)
+              battleChips.value = ev.totalChips
+            }
           })
         }
         if (ev.multDelta) {
-          floatNumber(jokerEl, `+${ev.multDelta} 倍率`, {
+          flyToHud(jokerEl, hudMultRef.value, `+${ev.multDelta}`, {
             color: '#ff5e7e',
             glow: 'rgba(255,94,126,0.85)',
-            size: 18
+            size: 26,
+            duration: 0.55,
+            onArrive: () => {
+              pulseHudCol(hudMultRef.value)
+              battleMult.value = ev.totalMult
+            }
           })
         }
+        if (!ev.chipsDelta && !ev.multDelta) {
+          // 兜底：effect 没改 chips/mult（理论上 buildScoreSequence 已过滤）
+          battleChips.value = ev.totalChips
+          battleMult.value = ev.totalMult
+        }
+      } else {
+        battleChips.value = ev.totalChips
+        battleMult.value = ev.totalMult
       }
-      battleChips.value = ev.totalChips
-      battleMult.value = ev.totalMult
-      await wait(320)
+      await wait(620)
       triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== jokerId)
     }
   }
 
-  // 6) final
+  // 6) final 公式爆炸：中央弹出 chips × mult = score 大字
+  await wait(180)
+  finalFormula.value = {
+    chips: finalEvent.chips,
+    mult: finalEvent.mult,
+    score: finalEvent.score
+  }
   lastScore.value = finalEvent.score
-  showScoreFloat.value = true
-  totalScore.value += finalEvent.score
-  showToastMessage(`${handType.name} +${finalEvent.score} 分！`, 'success')
-  await wait(680)
+  showFinalFormula.value = true
+  await wait(1500)
+
+  // 7) 公式 score 数字飞向 HUD 总分进度条，触发 totalScore 跳值
+  const progressEl = document.querySelector('.hud-progress')
+  const formulaEl = document.querySelector('.final-formula .ff-score')
+  if (progressEl && formulaEl) {
+    flyToHud(formulaEl, progressEl, `+${finalEvent.score}`, {
+      color: '#ffd166',
+      glow: 'rgba(255,209,102,0.95)',
+      size: 36,
+      duration: 0.55,
+      onArrive: () => {
+        totalScore.value += finalEvent.score
+      }
+    })
+    await wait(560)
+  } else {
+    totalScore.value += finalEvent.score
+  }
+  showFinalFormula.value = false
+  await wait(220)
 
   // 7) 副本淡出（自销毁）
   cloneByCardId.forEach(clone => {
@@ -903,13 +951,14 @@ onMounted(() => {
       </div>
     </Transition>
 
-    <!-- 得分飘字 -->
-    <Transition name="score-float">
-      <div
-        v-if="showScoreFloat"
-        class="score-float"
-      >
-        +{{ lastScore }}
+    <!-- final 公式爆炸（取代原 +score 飘字） -->
+    <Transition name="final-formula">
+      <div v-if="showFinalFormula" class="final-formula">
+        <span class="ff-chips">{{ finalFormula.chips }}</span>
+        <span class="ff-op">×</span>
+        <span class="ff-mult">{{ finalFormula.mult }}</span>
+        <span class="ff-op">=</span>
+        <span class="ff-score">{{ finalFormula.score }}</span>
       </div>
     </Transition>
 
