@@ -1,25 +1,45 @@
-/* v1.5.0 共享动效：keyframes、过场、Joker 触发、抽卡光效、牌型弹出、粒子、降级 */
+/* v1.5.1 共享动效：fade+slide+scale 转场、Joker 炸裂触发、稀有度光效、
+   牌型大字 banner、得分飘字、桌面 impact、screen-shake、粒子、降级 */
 
-/* (a) 过场转场升级 */
+/* ========== (a) 过场转场升级（fade + slide + scale） ========== */
 .fade-enter-active, .fade-leave-active {
-  transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.fade-enter-from { opacity: 0; transform: translateY(20px); }
-.fade-leave-to   { opacity: 0; transform: translateY(-20px); }
+.fade-enter-from { opacity: 0; transform: translateY(28px) scale(0.96); }
+.fade-leave-to   { opacity: 0; transform: translateY(-28px) scale(0.98); }
 
-/* (b) Joker 触发反馈 */
+/* ========== (b) Joker 触发反馈（炸裂版） ========== */
 .joker-card.triggering {
-  animation: joker-trigger 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: joker-trigger 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 5;
+  position: relative;
+}
+.joker-card.triggering::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 14px;
+  background: radial-gradient(circle, rgba(255,209,102,0.6) 0%, rgba(255,209,102,0.2) 40%, transparent 70%);
+  animation: joker-trigger-aura 0.7s ease-out;
+  pointer-events: none;
+  z-index: -1;
 }
 @keyframes joker-trigger {
-  0%   { transform: translateY(0) scale(1);     filter: drop-shadow(0 0 0 transparent); }
-  20%  { transform: translateY(-12px) scale(1.12); filter: drop-shadow(0 0 18px var(--gold)); }
-  60%  { transform: translateY(-6px) scale(1.05);  filter: drop-shadow(0 0 12px var(--gold)); }
-  100% { transform: translateY(0) scale(1);     filter: drop-shadow(0 0 0 transparent); }
+  0%   { transform: translateY(0) scale(1) rotate(0deg);     filter: drop-shadow(0 0 0 transparent) brightness(1); }
+  15%  { transform: translateY(-18px) scale(1.22) rotate(-6deg); filter: drop-shadow(0 0 24px var(--gold)) brightness(1.4); }
+  35%  { transform: translateY(-12px) scale(1.16) rotate(5deg);  filter: drop-shadow(0 0 18px var(--gold)) brightness(1.25); }
+  60%  { transform: translateY(-6px)  scale(1.08) rotate(-2deg); filter: drop-shadow(0 0 12px var(--gold)) brightness(1.1); }
+  100% { transform: translateY(0) scale(1) rotate(0deg);     filter: drop-shadow(0 0 0 transparent) brightness(1); }
+}
+@keyframes joker-trigger-aura {
+  0%   { transform: scale(0.6); opacity: 0; }
+  30%  { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
 
-/* (c) 稀有度抽卡光效 */
+/* ========== (c) 稀有度抽卡光效 ========== */
 .joker-card.rarity-rare,
 .joker-card.rarity-legendary {
   position: relative;
@@ -29,7 +49,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.8) 50%, transparent 70%);
+  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.85) 50%, transparent 70%);
   transform: translateX(-100%);
   pointer-events: none;
   z-index: 10;
@@ -44,37 +64,114 @@
   100% { transform: translateX(100%); }
 }
 
-/* (d) 牌型弹出 hand-type-pop */
+/* ========== (d) 牌型大字 banner（炸裂金光版） ========== */
 .hand-type-banner {
   position: fixed;
-  top: 38%;
+  top: 36%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-family: 'Press Start 2P', monospace;
-  font-size: 36px;
-  color: var(--gold);
-  text-shadow: 0 4px 0 #6b3fa0, 0 0 24px rgba(255,209,102,.6);
+  font-family: 'Press Start 2P', 'Georgia', monospace;
+  font-size: 64px;
+  font-weight: 900;
+  color: #ffe082;
+  text-shadow:
+    0 0 0 #fff,
+    -3px 0 0 #6b3fa0,
+    3px 0 0 #6b3fa0,
+    0 -3px 0 #6b3fa0,
+    0 3px 0 #6b3fa0,
+    0 6px 0 #2a1c33,
+    0 0 28px rgba(255,209,102,0.9),
+    0 0 56px rgba(255,150,40,0.7);
   pointer-events: none;
   z-index: 150;
-  letter-spacing: 2px;
+  letter-spacing: 4px;
   white-space: nowrap;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.6));
 }
 .hand-type-pop-enter-active {
-  animation: hand-type-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: hand-type-pop 0.7s cubic-bezier(0.34, 1.8, 0.64, 1);
 }
 .hand-type-pop-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 .hand-type-pop-leave-to {
   opacity: 0;
+  transform: translate(-50%, -50%) scale(1.1);
 }
 @keyframes hand-type-pop {
-  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-  60%  { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  0%   { transform: translate(-50%, -50%) scale(0.3) rotate(-8deg); opacity: 0; }
+  40%  { transform: translate(-50%, -50%) scale(1.4) rotate(3deg);  opacity: 1; }
+  70%  { transform: translate(-50%, -50%) scale(0.95) rotate(-1deg); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1) rotate(0deg);   opacity: 1; }
+}
+
+/* ========== (e) 得分飘字（+score 弹出） ========== */
+.score-float {
+  position: fixed;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 48px;
+  font-weight: 900;
+  color: #ffd166;
+  text-shadow:
+    -2px 0 0 #2a1c33,
+    2px 0 0 #2a1c33,
+    0 -2px 0 #2a1c33,
+    0 2px 0 #2a1c33,
+    0 4px 0 #6b3fa0,
+    0 0 24px rgba(255,209,102,0.9);
+  pointer-events: none;
+  z-index: 149;
+  letter-spacing: 3px;
+}
+.score-float-enter-active {
+  animation: score-float-in 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.score-float-leave-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.score-float-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -110%) scale(1.05);
+}
+@keyframes score-float-in {
+  0%   { transform: translate(-50%, -30%) scale(0.4); opacity: 0; }
+  35%  { transform: translate(-50%, -55%) scale(1.25); opacity: 1; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
-/* (e) 粒子样式 */
+/* ========== (f) 桌面 impact 闪光 ========== */
+.play-table.impact {
+  animation: play-table-impact 0.45s ease-out;
+}
+@keyframes play-table-impact {
+  0%   { box-shadow: 0 0 0 0 rgba(255,209,102,0); transform: scale(1); }
+  20%  { box-shadow: 0 0 32px 8px rgba(255,209,102,0.55); transform: scale(1.012); }
+  60%  { box-shadow: 0 0 18px 2px rgba(255,209,102,0.25); transform: scale(0.998); }
+  100% { box-shadow: 0 0 0 0 rgba(255,209,102,0); transform: scale(1); }
+}
+
+/* ========== (g) 全屏 screen-shake ========== */
+.screen-shake {
+  animation: screen-shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes screen-shake {
+  0%   { transform: translate(0, 0); }
+  10%  { transform: translate(-4px, 2px); }
+  20%  { transform: translate(5px, -3px); }
+  30%  { transform: translate(-6px, 4px); }
+  40%  { transform: translate(4px, -2px); }
+  50%  { transform: translate(-3px, 3px); }
+  60%  { transform: translate(2px, -2px); }
+  70%  { transform: translate(-2px, 1px); }
+  80%  { transform: translate(1px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ========== (h) 粒子样式 ========== */
 .particle-burst {
   position: fixed;
   top: 50%;
@@ -84,11 +181,20 @@
 }
 .particle {
   position: absolute;
-  font-size: 24px;
+  font-size: 28px;
   will-change: transform, opacity;
+  filter: drop-shadow(0 0 8px rgba(255,209,102,0.8));
+}
+.joker-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 160;
+  font-size: 22px;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 0 6px rgba(255,209,102,0.9));
 }
 
-/* (f) prefers-reduced-motion 总开关 */
+/* ========== (i) prefers-reduced-motion 总开关 ========== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

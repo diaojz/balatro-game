@@ -58,3 +58,41 @@ export function burstParticles(count = 30) {
 
   setTimeout(() => container.remove(), 1800)
 }
+
+/**
+ * Joker 触发时，从指定 DOM 元素（卡牌）位置飞溅出少量金色粒子。
+ * 0.7s 内消失，DOM 自动清理。
+ */
+export function burstJokerParticles(anchorEl, count = 6) {
+  if (!anchorEl) return
+  const rect = anchorEl.getBoundingClientRect()
+  const cx = rect.left + rect.width / 2
+  const cy = rect.top + rect.height / 2
+  const symbols = ['✨', '⭐', '💫']
+
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div')
+    p.className = 'joker-particle'
+    p.textContent = symbols[i % symbols.length]
+    p.style.left = `${cx}px`
+    p.style.top = `${cy}px`
+    document.body.appendChild(p)
+
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6
+    const distance = 60 + Math.random() * 50
+    gsap.fromTo(
+      p,
+      { x: 0, y: 0, scale: 0.4, opacity: 1, rotation: 0 },
+      {
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance - 30,
+        scale: 1.2,
+        opacity: 0,
+        rotation: (Math.random() - 0.5) * 360,
+        duration: 0.7,
+        ease: 'power2.out',
+        onComplete: () => p.remove()
+      }
+    )
+  }
+}

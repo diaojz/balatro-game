@@ -4,7 +4,7 @@ import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore } from './utils/scoring.js'
 import { BLINDS } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
-import { burstParticles } from './utils/animation.js'
+import { burstParticles, burstJokerParticles, flyToTable } from './utils/animation.js'
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
 import ScoreCounter from './components/ScoreCounter.vue'
@@ -55,7 +55,14 @@ const HAND_SIZE = 8
 const shopJokers = ref([])
 const triggeredJokerIds = ref([])
 const shimmeringJokerIds = ref([])
+const handCardRefs = ref([])
+const playTableRef = ref(null)
+const showScoreFloat = ref(false)
 const toastMessage = ref('')
+
+function setHandCardRef(el, index) {
+  handCardRefs.value[index] = el
+}
 const toastType = ref('info')
 const showToast = ref(false)
 const showHandInfo = ref(false)
@@ -388,14 +395,17 @@ function triggerJokerSequence() {
   jokers.forEach((joker, idx) => {
     setTimeout(() => {
       triggeredJokerIds.value = [...triggeredJokerIds.value, joker.id]
+      const els = document.querySelectorAll('.joker-bar .joker-bar-row .joker-card:not(.empty)')
+      const el = els[idx]
+      if (el) burstJokerParticles(el, 6)
       setTimeout(() => {
         triggeredJokerIds.value = triggeredJokerIds.value.filter(id => id !== joker.id)
-      }, 600)
-    }, idx * 200)
+      }, 700)
+    }, idx * 220)
   })
 }
 
-function playHand() {
+async function playHand() {
   const selected = selectedCards.value
 
   if (selected.length === 0) {
@@ -405,21 +415,45 @@ function playHand() {
 
   const handType = identifyHand(selected)
   const score = calculateScore(selected, handType, ownedJokers.value)
+  const selectedSnapshot = [...selected]
 
-  playedCards.value = [...selected]
+  // 1) FLIP 飞动：把已选牌从手牌位置飞到 .play-table 中央
+  const targetEl = playTableRef.value
+  if (targetEl) {
+    hand.value.forEach((card, idx) => {
+      if (!card.selected) return
+      const el = handCardRefs.value[idx]?.cardRef
+      if (el) {
+        flyToTable(el, targetEl, { delay: idx * 0.05, duration: 0.5 })
+      }
+    })
+    await new Promise(r => setTimeout(r, 580))
+    targetEl.classList.add('impact')
+    setTimeout(() => targetEl.classList.remove('impact'), 460)
+  }
+
+  // 2) 全屏 screen-shake
+  const shell = document.querySelector('.balatro-shell')
+  shell?.classList.add('screen-shake')
+  setTimeout(() => shell?.classList.remove('screen-shake'), 360)
+
+  // 3) 数据更新 + 中央 banner / score-float
+  playedCards.value = [...selectedSnapshot]
   showPlayedCards.value = true
+  showScoreFloat.value = true
   totalScore.value += score
   handsLeft.value--
   lastPlayedHand.value = handType
   lastScore.value = score
 
-  discardPile.value.push(...selected.map(card => ({ ...card, selected: false })))
-  hand.value = hand.value.filter(card => !card.selected)
+  discardPile.value.push(...selectedSnapshot.map(card => ({ ...card, selected: false })))
+  hand.value = hand.value.filter(card => !selectedSnapshot.find(s => s.id === card.id))
   showToastMessage(`${handType.name} +${score} 分！`, 'success')
   triggerJokerSequence()
 
   setTimeout(() => {
     showPlayedCards.value = false
+    showScoreFloat.value = false
     playedCards.value = []
 
     if (totalScore.value >= blind.value.targetScore) {
@@ -429,7 +463,7 @@ function playHand() {
     } else {
       refillHand()
     }
-  }, 3000)
+  }, 1800)
 }
 
 function discardCards() {
@@ -630,6 +664,16 @@ onMounted(() => {
         class="hand-type-banner"
       >
         {{ lastPlayedHand.name }}
+      </div>
+    </Transition>
+
+    <!-- 得分飘字 -->
+    <Transition name="score-float">
+      <div
+        v-if="showScoreFloat"
+        class="score-float"
+      >
+        +{{ lastScore }}
       </div>
     </Transition>
 
@@ -1023,7 +1067,7 @@ onMounted(() => {
         </div>
 
         <!-- 出牌预览区 -->
-        <div class="play-table">
+        <div class="play-table" ref="playTableRef">
           <div v-if="showPlayedCards && playedCards.length > 0" class="play-table-scored">
             <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
             <div class="play-table-cards">
@@ -1074,6 +1118,7 @@ onMounted(() => {
           <div class="hand-fan">
             <PlayingCard
               v-for="(card, index) in hand"
+              :ref="(el) => setHandCardRef(el, index)"
               :key="card.id"
               :card="card"
               :selected="card.selected"

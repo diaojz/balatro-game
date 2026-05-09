@@ -66,11 +66,13 @@ const cardRef = ref(null)
 onMounted(() => {
   if (!cardRef.value) return
   gsap.from(cardRef.value, {
-    x: 200,
+    x: 240,
+    y: -32,
+    rotation: -10,
     opacity: 0,
-    duration: 0.5,
-    delay: props.dealIndex * 0.06,
-    ease: 'back.out(1.4)',
+    duration: 0.55,
+    delay: props.dealIndex * 0.08,
+    ease: 'back.out(1.6)',
     clearProps: 'transform,opacity'
   })
 })
