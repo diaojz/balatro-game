@@ -75,25 +75,67 @@ const currentBlindProgress = computed(() => {
 })
 const availableBlindOptions = computed(() => {
   const anteBlinds = currentAnteBlinds.value
+  const nextChallengeBlind = anteBlinds.find(item => !completedBlindIds.value.includes(item.id))
 
   return anteBlinds.map((item, index) => {
     const previousBlind = index > 0 ? anteBlinds[index - 1] : null
     const isCompleted = completedBlindIds.value.includes(item.id)
     const isUnlocked = !previousBlind || completedBlindIds.value.includes(previousBlind.id)
     const isCurrent = item.id === blind.value?.id
+    const canChallenge = isUnlocked && !isCompleted
+    const isRecommended = nextChallengeBlind?.id === item.id && canChallenge
+    const statusTone = isCompleted ? 'cleared' : canChallenge ? 'available' : 'locked'
+    const statusLabel = isCompleted ? '已完成' : canChallenge ? '当前挑战' : '未解锁'
+    const actionLabel = isCompleted
+      ? '已通关'
+      : isRecommended
+        ? '下一步：点击开始'
+        : canChallenge
+          ? '可挑战'
+          : '需先完成前一项'
 
     return {
       ...item,
       isCompleted,
       isUnlocked,
       isCurrent,
-      canChallenge: isUnlocked && !isCompleted
+      canChallenge,
+      isRecommended,
+      statusTone,
+      statusLabel,
+      actionLabel
     }
   })
 })
 const selectedCards = computed(() => hand.value.filter(card => card.selected))
+const selectedCardCount = computed(() => selectedCards.value.length)
+const cardsNeededToPlay = computed(() => Math.max(0, 5 - selectedCardCount.value))
+const canPlaySelectedCards = computed(() => selectedCardCount.value === 5)
+const selectionStatus = computed(() => {
+  if (canPlaySelectedCards.value) {
+    return {
+      tone: 'ready',
+      title: '已满足出牌条件',
+      description: '当前已选满 5 张，可以直接出牌。'
+    }
+  }
+
+  if (selectedCardCount.value === 0) {
+    return {
+      tone: 'idle',
+      title: '尚未选择手牌',
+      description: '请从下方手牌中选择 5 张组成牌型。'
+    }
+  }
+
+  return {
+    tone: 'building',
+    title: `还差 ${cardsNeededToPlay.value} 张可出牌`,
+    description: `当前已选 ${selectedCardCount.value} / 5 张，继续补足手牌后再出牌。`
+  }
+})
 const selectedScorePreview = computed(() => {
-  if (selectedCards.value.length !== 5) {
+  if (!canPlaySelectedCards.value) {
     return { handType: null, score: 0 }
   }
 
@@ -106,6 +148,97 @@ const selectedScorePreview = computed(() => {
 const drawPileCount = computed(() => deck.value.length)
 const discardPileCount = computed(() => discardPile.value.length)
 const activeConsumable = computed(() => ownedJokers.value[0] || null)
+const jokerSlotsLeft = computed(() => Math.max(0, maxJokers - ownedJokers.value.length))
+const buildSummary = computed(() => {
+  const rarityCounter = ownedJokers.value.reduce((counter, joker) => {
+    const rarity = joker.rarity || '普通'
+    counter[rarity] = (counter[rarity] || 0) + 1
+    return counter
+  }, {})
+  const sortedRarities = Object.entries(rarityCounter).sort((a, b) => b[1] - a[1])
+  const dominantRarity = sortedRarities[0]
+
+  return {
+    totalSellValue: ownedJokers.value.reduce((sum, joker) => sum + Math.floor(joker.price / 2), 0),
+    dominantRarityLabel: dominantRarity ? `${dominantRarity[0]} × ${dominantRarity[1]}` : '暂无构筑',
+    rarityCount: sortedRarities.length
+  }
+})
+const shopRefreshState = computed(() => {
+  const canAfford = money.value >= 1
+
+  return {
+    disabled: !canAfford,
+    label: canAfford ? '刷新' : '金币不足',
+    detail: canAfford ? '消耗 $1 获得一组新商品' : '至少需要 $1 才能刷新商店'
+  }
+})
+const shopOfferStates = computed(() =>
+  shopJokers.value.map(joker => {
+    const canAfford = money.value >= joker.price
+    const hasSlot = ownedJokers.value.length < maxJokers
+    let status = 'available'
+    let statusLabel = '可购买'
+    let detail = '满足条件，可直接加入构筑'
+
+    if (!hasSlot) {
+      status = 'full'
+      statusLabel = '槽位已满'
+      detail = '先出售一张 Joker，再回来购买'
+    } else if (!canAfford) {
+      status = 'insufficient'
+      statusLabel = '金币不足'
+      detail = `还差 $${joker.price - money.value} 才能购买`
+    }
+
+    return {
+      ...joker,
+      canAfford,
+      hasSlot,
+      canBuy: canAfford && hasSlot,
+      status,
+      statusLabel,
+      detail
+    }
+  })
+)
+const shopSummaryCards = computed(() => [
+  {
+    label: '可用金币',
+    value: `$${money.value}`,
+    tone: 'gold',
+    hint: money.value >= 1 ? '可刷新商店' : '无法刷新'
+  },
+  {
+    label: 'Joker 槽位',
+    value: `${ownedJokers.value.length}/${maxJokers}`,
+    tone: jokerSlotsLeft.value > 0 ? 'mint' : 'slate',
+    hint: jokerSlotsLeft.value > 0 ? `剩余 ${jokerSlotsLeft.value} 个空槽` : '需要出售后再购入'
+  },
+  {
+    label: '可立即购买',
+    value: `${shopOfferStates.value.filter(joker => joker.canBuy).length}/${shopOfferStates.value.length}`,
+    tone: shopOfferStates.value.some(joker => joker.canBuy) ? 'sky' : 'rose',
+    hint: shopOfferStates.value.some(joker => joker.canBuy) ? '优先查看高价收益牌' : '当前没有可买商品'
+  }
+])
+const shopBuildHighlights = computed(() => [
+  {
+    label: '构筑规模',
+    value: `${ownedJokers.value.length} 张`,
+    hint: jokerSlotsLeft.value > 0 ? `还可再放 ${jokerSlotsLeft.value} 张` : '槽位已满'
+  },
+  {
+    label: '主流稀有度',
+    value: buildSummary.value.dominantRarityLabel,
+    hint: buildSummary.value.rarityCount > 1 ? `共 ${buildSummary.value.rarityCount} 种稀有度` : '当前构筑较集中'
+  },
+  {
+    label: '出售回收',
+    value: `$${buildSummary.value.totalSellValue}`,
+    hint: ownedJokers.value.length > 0 ? '全部卖出可回收的金币' : '暂无可出售牌'
+  }
+])
 const handInfoRows = computed(() =>
   Object.values(BLINDS[0].handLevels || {}).map(row => ({
     ...row,
@@ -256,6 +389,7 @@ function playHand() {
   lastScore.value = score
 
   discardPile.value.push(...selected.map(card => ({ ...card, selected: false })))
+  hand.value = hand.value.filter(card => !card.selected)
   showToastMessage(`${handType.name} +${score} 分！`, 'success')
 
   setTimeout(() => {
@@ -398,499 +532,490 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="balatro-shell min-h-screen text-white">
+  <div class="balatro-shell">
+    <!-- Toast -->
     <Transition name="toast">
       <div
         v-if="showToast"
-        class="fixed right-4 top-4 z-50 rounded-2xl border border-white/10 px-6 py-4 text-lg font-bold shadow-2xl"
+        class="toast-bar"
         :class="{
-          'bg-sky-500 text-slate-950': toastType === 'info',
-          'bg-emerald-400 text-slate-950': toastType === 'success',
-          'bg-rose-500 text-white': toastType === 'error',
-          'bg-amber-400 text-slate-950': toastType === 'warning'
+          'toast--info': toastType === 'info',
+          'toast--success': toastType === 'success',
+          'toast--error': toastType === 'error',
+          'toast--warning': toastType === 'warning'
         }"
       >
         {{ toastMessage }}
       </div>
     </Transition>
 
-    <div class="mx-auto flex min-h-screen max-w-[1600px] gap-4 p-4 lg:p-6">
-      <aside class="hidden w-[260px] flex-col gap-4 xl:flex">
-        <div class="pixel-panel px-4 py-5">
-          <div class="blind-chip mb-4 text-center">{{ blind.label }}</div>
-          <div class="rounded-[28px] border border-sky-400/40 bg-slate-950/70 px-4 py-4 shadow-inner shadow-black/40">
-            <div class="mb-4 flex items-center gap-3">
-              <div class="flex h-20 w-20 items-center justify-center rounded-full border-4 border-sky-300/50 bg-sky-950 text-center text-sm font-black uppercase leading-tight text-sky-100">
-                {{ blind.badge }}
-              </div>
-              <div>
-                <p class="text-sm font-semibold text-slate-300">至少得分</p>
-                <p class="text-4xl font-black text-amber-300">{{ blind.targetScore }}</p>
-                <p class="text-sm text-slate-400">奖励 {{ blind.rewardText }}</p>
-              </div>
-            </div>
-            <div class="rounded-2xl bg-slate-900/80 px-4 py-3">
-              <p class="text-sm font-semibold tracking-wide text-slate-300">回合分数</p>
-              <p class="text-5xl font-black text-white">{{ totalScore }}</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="pixel-panel px-4 py-5">
-          <div class="score-track mb-4">
-            <div class="chips-lane">{{ selectedScorePreview.handType ? selectedScorePreview.handType.chips : 0 }}</div>
-            <div class="mult-lane">x{{ selectedScorePreview.handType ? selectedScorePreview.handType.mult : 0 }}</div>
-          </div>
-
-          <div v-if="lastPlayedHand" class="mb-4 rounded-[24px] border border-amber-300/30 bg-slate-950/70 px-4 py-4">
-            <p class="text-sm text-slate-300">上一手</p>
-            <p class="text-3xl font-black text-white">{{ lastPlayedHand.name }}</p>
-            <p class="mt-2 text-4xl font-black text-amber-300">{{ lastScore }}</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3 text-center">
-            <div class="action-pill bg-rose-500 text-white">
-              <span class="block text-xs font-bold tracking-[0.2em] text-white/80">出牌</span>
-              <span class="text-4xl font-black">{{ handsLeft }}</span>
-            </div>
-            <div class="action-pill bg-slate-700 text-white">
-              <span class="block text-xs font-bold tracking-[0.2em] text-white/80">弃牌</span>
-              <span class="text-4xl font-black">{{ discardsLeft }}</span>
-            </div>
-            <div class="action-pill bg-amber-400 text-slate-950">
-              <span class="block text-xs font-bold tracking-[0.2em] text-slate-900/70">金币</span>
-              <span class="text-4xl font-black">${{ money }}</span>
-            </div>
-            <div class="action-pill bg-sky-500 text-white">
-              <span class="block text-xs font-bold tracking-[0.2em] text-white/80">阶段</span>
-              <span class="text-3xl font-black">{{ currentBlind + 1 }}/{{ BLINDS.length }}</span>
+    <Transition name="fade" mode="out-in">
+      <!-- ========== SETUP ========== -->
+      <div v-if="isSetupPhase" key="setup" class="phase-panel">
+        <div class="setup-layout">
+          <div class="setup-hero">
+            <h1 class="setup-title">小丑牌</h1>
+            <p class="setup-sub">扑克肉鸽 · 掌机风格致敬版</p>
+            <div class="setup-cards">
+              <span class="card-demo black tilt-l">
+                <span class="card-corner tl">A<br>♠</span>
+                <span class="card-pip">♠</span>
+                <span class="card-corner br">A<br>♠</span>
+              </span>
+              <span class="card-demo red tilt-r">
+                <span class="card-corner tl">K<br>♥</span>
+                <span class="card-pip">♥</span>
+                <span class="card-corner br">K<br>♥</span>
+              </span>
             </div>
           </div>
 
-          <div class="mt-4 grid gap-3">
-            <button @click="showHandInfo = true" class="menu-button bg-rose-500 hover:bg-rose-400">比赛信息</button>
-            <button class="menu-button bg-amber-400 text-slate-950 hover:bg-amber-300">选项</button>
-          </div>
-
-          <div class="mt-4 rounded-[24px] border border-white/10 bg-slate-950/50 px-4 py-4">
-            <p class="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">Run Phase</p>
-            <p class="mt-2 text-2xl font-black text-white">{{ runPhase }}</p>
-          </div>
-        </div>
-      </aside>
-
-      <main class="flex min-w-0 flex-1 flex-col gap-4">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex-1 rounded-[32px] border border-white/10 bg-slate-950/45 px-4 py-3 shadow-inner shadow-black/20 backdrop-blur-sm">
-            <div class="mb-3 flex items-center justify-between">
-              <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Joker 区</p>
-              <span class="text-sm font-bold text-slate-400">{{ ownedJokers.length }}/{{ maxJokers }}</span>
-            </div>
-            <div class="flex min-h-[136px] gap-3 overflow-x-auto pb-2">
-              <div
-                v-for="joker in ownedJokers"
-                :key="joker.id"
-                class="joker-card w-[120px] flex-shrink-0 rounded-[20px] border p-3 shadow-xl"
-                :class="getRarityBgColor(joker.rarity)"
-              >
-                <div class="mb-2 flex items-center justify-between">
-                  <span class="text-xs font-black tracking-[0.3em] text-white/70">JOKER</span>
-                  <span class="text-xs font-bold" :class="getRarityColor(joker.rarity)">{{ joker.rarity }}</span>
-                </div>
-                <div class="mb-2 flex h-14 items-center justify-center rounded-2xl bg-black/20 text-4xl">🃏</div>
-                <h3 class="text-sm font-black text-white">{{ joker.name }}</h3>
-                <p class="mt-1 text-xs leading-relaxed text-white/80">{{ joker.description }}</p>
-              </div>
-              <div
-                v-for="slot in maxJokers - ownedJokers.length"
-                :key="`joker-slot-${slot}`"
-                class="joker-empty w-[120px] flex-shrink-0 rounded-[20px] border-2 border-dashed border-white/15 bg-slate-900/30"
-              >
-                <span class="text-sm font-bold text-slate-500">空槽位</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="hidden w-[140px] rounded-[32px] border border-white/10 bg-slate-950/45 p-4 shadow-inner shadow-black/20 backdrop-blur-sm lg:block">
-            <div class="mb-3 text-center text-xs font-bold uppercase tracking-[0.35em] text-slate-300">消耗品</div>
-            <div class="consumable-card mx-auto flex h-[180px] w-[110px] items-center justify-center rounded-[22px] border border-amber-200/25 bg-gradient-to-br from-amber-200/20 via-yellow-500/15 to-slate-950/50 shadow-lg">
-              <div v-if="activeConsumable" class="px-3 text-center">
-                <p class="text-xs font-black tracking-[0.25em] text-amber-200/70">TOWER</p>
-                <p class="mt-3 text-xl font-black text-white">{{ activeConsumable.name }}</p>
-              </div>
-              <span v-else class="text-xs font-bold text-slate-500">暂无</span>
-            </div>
-            <p class="mt-3 text-center text-sm font-bold text-slate-400">1 / 2</p>
-          </div>
-        </div>
-
-        <Transition name="fade" mode="out-in">
-          <div v-if="isSetupPhase" key="setup" class="pixel-panel flex-1 px-6 py-8 lg:px-8">
-            <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Run Setup</p>
-            <div class="mt-4 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-              <div>
-                <h2 class="text-5xl font-black text-white">开始一局新 Run</h2>
-                <p class="mt-4 max-w-3xl text-lg leading-relaxed text-slate-300">
-                  先选择最小可用的起始牌组与难度配置，然后进入盲注选择。
-                </p>
-
-                <div class="mt-8 grid gap-4">
-                  <section class="rounded-[28px] border border-white/10 bg-slate-900/45 p-5">
-                    <p class="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Deck</p>
-                    <div class="mt-4 grid gap-4">
-                      <button
-                        v-for="option in STARTER_DECK_OPTIONS"
-                        :key="option.key"
-                        @click="selectedDeckOption = option.key"
-                        class="setup-option text-left"
-                        :class="{ active: selectedDeckOption === option.key }"
-                      >
-                        <div class="flex items-center justify-between gap-3">
-                          <h3 class="text-2xl font-black text-white">{{ option.name }}</h3>
-                          <span class="text-sm font-bold text-slate-300">{{ selectedDeckOption === option.key ? '已选择' : '可选' }}</span>
-                        </div>
-                        <p class="mt-3 text-sm leading-relaxed text-slate-300">{{ option.description }}</p>
-                      </button>
-                    </div>
-                  </section>
-
-                  <section class="rounded-[28px] border border-white/10 bg-slate-900/45 p-5">
-                    <p class="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Difficulty</p>
-                    <div class="mt-4 grid gap-4">
-                      <button
-                        v-for="option in DIFFICULTY_OPTIONS"
-                        :key="option.key"
-                        @click="selectedDifficultyOption = option.key"
-                        class="setup-option text-left"
-                        :class="{ active: selectedDifficultyOption === option.key }"
-                      >
-                        <div class="flex items-center justify-between gap-3">
-                          <h3 class="text-2xl font-black text-white">{{ option.name }}</h3>
-                          <span class="text-sm font-bold text-slate-300">起始金币 ${{ option.startingMoney }}</span>
-                        </div>
-                        <p class="mt-3 text-sm leading-relaxed text-slate-300">{{ option.description }}</p>
-                      </button>
-                    </div>
-                  </section>
-                </div>
-              </div>
-
-              <div class="rounded-[32px] border border-white/10 bg-slate-950/55 p-6 shadow-inner shadow-black/30">
-                <p class="text-xs font-black uppercase tracking-[0.35em] text-slate-400">当前配置</p>
-                <div class="mt-6 space-y-5">
-                  <div class="rounded-[24px] border border-white/10 bg-slate-900/60 p-5">
-                    <p class="text-sm font-bold text-slate-400">起始牌组</p>
-                    <p class="mt-2 text-3xl font-black text-white">{{ selectedDeckConfig.name }}</p>
-                    <p class="mt-2 text-sm text-slate-300">{{ selectedDeckConfig.description }}</p>
+          <div class="setup-options">
+            <section class="setup-section">
+              <p class="setup-section-label">牌组</p>
+              <div class="setup-option-list">
+                <button
+                  v-for="option in STARTER_DECK_OPTIONS"
+                  :key="option.key"
+                  @click="selectedDeckOption = option.key"
+                  class="setup-option-card"
+                  :class="{ active: selectedDeckOption === option.key }"
+                >
+                  <div class="setup-option-head">
+                    <h3>{{ option.name }}</h3>
+                    <span class="setup-option-badge">{{ selectedDeckOption === option.key ? '已选择' : '可选' }}</span>
                   </div>
-                  <div class="rounded-[24px] border border-white/10 bg-slate-900/60 p-5">
-                    <p class="text-sm font-bold text-slate-400">难度</p>
-                    <p class="mt-2 text-3xl font-black text-white">{{ selectedDifficultyConfig.name }}</p>
-                    <p class="mt-2 text-sm text-slate-300">起始金币 ${{ selectedDifficultyConfig.startingMoney }}</p>
-                  </div>
-                </div>
-                <button @click="startRun" class="mt-8 w-full rounded-[24px] bg-emerald-400 px-8 py-5 text-xl font-black text-slate-950 shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-300">
-                  开始游戏
+                  <p>{{ option.description }}</p>
                 </button>
               </div>
-            </div>
-          </div>
+            </section>
 
-          <div v-else-if="isBlindSelectPhase" key="blind-select" class="pixel-panel flex-1 px-6 py-8 lg:px-8">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Blind Select</p>
-                <h2 class="mt-3 text-5xl font-black text-white">选择当前盲注</h2>
-                <p class="mt-4 max-w-3xl text-lg leading-relaxed text-slate-300">
-                  当前为 Ante {{ currentAnte }}。只开放本 Ante 的可挑战盲注，按顺序推进。
-                </p>
-              </div>
-              <div class="rounded-[28px] border border-white/10 bg-slate-950/55 px-5 py-4 text-right">
-                <p class="text-xs font-black uppercase tracking-[0.35em] text-slate-400">进度</p>
-                <p class="mt-2 text-3xl font-black text-white">{{ currentBlindProgress }}</p>
-                <p class="mt-1 text-sm text-slate-400">Ante {{ currentAnte }} 已完成</p>
-              </div>
-            </div>
-
-            <div class="mt-8 grid gap-4 xl:grid-cols-3">
-              <button
-                v-for="blindOption in availableBlindOptions"
-                :key="blindOption.id"
-                @click="selectBlind(blindOption.id)"
-                :disabled="!blindOption.canChallenge"
-                class="blind-select-card text-left"
-                :class="{
-                  active: selectedBlindId === blindOption.id,
-                  locked: !blindOption.canChallenge,
-                  cleared: blindOption.isCompleted
-                }"
-              >
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <p class="text-xs font-black uppercase tracking-[0.35em] text-slate-400">{{ blindOption.label }}</p>
-                    <h3 class="mt-2 text-3xl font-black text-white">{{ blindOption.name }}</h3>
-                  </div>
-                  <span class="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase text-slate-200">
-                    {{ blindOption.type }}
-                  </span>
-                </div>
-
-                <div class="mt-5 grid grid-cols-2 gap-3 text-center">
-                  <div class="rounded-[20px] bg-slate-950/60 px-4 py-4">
-                    <p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">目标</p>
-                    <p class="mt-2 text-3xl font-black text-amber-300">{{ blindOption.targetScore }}</p>
-                  </div>
-                  <div class="rounded-[20px] bg-slate-950/60 px-4 py-4">
-                    <p class="text-xs font-bold uppercase tracking-[0.25em] text-slate-400">奖励</p>
-                    <p class="mt-2 text-3xl font-black text-emerald-300">{{ blindOption.rewardText }}</p>
-                  </div>
-                </div>
-
-                <div class="mt-5 rounded-[22px] border border-white/10 bg-slate-950/40 px-4 py-4 text-sm leading-relaxed text-slate-300">
-                  <p>出牌 {{ blindOption.hands }} 次 · 弃牌 {{ blindOption.discards }} 次</p>
-                  <p v-if="blindOption.bossRule" class="mt-2 text-amber-200">Boss 效果：{{ blindOption.bossRule.description }}</p>
-                </div>
-
-                <div class="mt-5 flex items-center justify-between text-sm font-bold">
-                  <span v-if="blindOption.isCompleted" class="text-emerald-300">已通关</span>
-                  <span v-else-if="blindOption.canChallenge" class="text-sky-300">点击开始挑战</span>
-                  <span v-else class="text-slate-500">尚未解锁</span>
-                  <span class="text-slate-400">Round {{ blindOption.round }}</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div v-else-if="isShopPhase" key="shop" class="shop-shell pixel-panel flex-1 px-6 py-6 lg:px-8">
-            <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Shop</p>
-                <h2 class="text-4xl font-black text-white">商店</h2>
-              </div>
-              <div class="flex items-center gap-3">
-                <div class="rounded-2xl border border-amber-300/20 bg-slate-950/60 px-4 py-3 text-2xl font-black text-amber-300">${{ money }}</div>
-                <button @click="rerollShop" class="rounded-2xl bg-sky-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-sky-950/40 transition hover:bg-sky-400">刷新 $1</button>
-              </div>
-            </div>
-
-            <div class="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-3">
-              <div
-                v-for="joker in shopJokers"
-                :key="joker.id"
-                class="rounded-[28px] border border-white/10 bg-slate-900/75 p-5 shadow-2xl shadow-black/20"
-              >
-                <div class="mb-4 flex items-center justify-between">
-                  <div>
-                    <p class="text-xs font-black tracking-[0.35em] text-slate-400">JOKER</p>
-                    <h3 class="text-2xl font-black text-white">{{ joker.name }}</h3>
-                  </div>
-                  <span class="rounded-full border border-white/10 px-3 py-1 text-xs font-black uppercase" :class="getRarityColor(joker.rarity)">
-                    {{ joker.rarity }}
-                  </span>
-                </div>
-                <div class="mb-4 flex h-28 items-center justify-center rounded-[24px] bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 text-5xl shadow-inner shadow-black/40">🃏</div>
-                <p class="mb-6 min-h-[48px] text-sm leading-relaxed text-slate-200">{{ joker.description }}</p>
-                <div class="flex items-center justify-between">
-                  <span class="text-3xl font-black text-amber-300">${{ joker.price }}</span>
-                  <button @click="buyJoker(joker)" class="rounded-2xl bg-amber-400 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-300">购买</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-6">
-              <div class="mb-3 flex items-center justify-between">
-                <h3 class="text-2xl font-black text-white">我的构筑</h3>
-                <span class="text-sm font-bold text-slate-400">{{ ownedJokers.length }}/{{ maxJokers }}</span>
-              </div>
-              <div v-if="ownedJokers.length === 0" class="rounded-[24px] border border-dashed border-white/10 bg-slate-900/30 px-6 py-10 text-center text-slate-500">
-                还没有小丑牌
-              </div>
-              <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <div
-                  v-for="joker in ownedJokers"
-                  :key="joker.id"
-                  class="rounded-[24px] border border-white/10 p-4 shadow-lg"
-                  :class="getRarityBgColor(joker.rarity)"
+            <section class="setup-section">
+              <p class="setup-section-label">难度</p>
+              <div class="setup-option-list">
+                <button
+                  v-for="option in DIFFICULTY_OPTIONS"
+                  :key="option.key"
+                  @click="selectedDifficultyOption = option.key"
+                  class="setup-option-card"
+                  :class="{ active: selectedDifficultyOption === option.key }"
                 >
-                  <p class="text-xs font-black tracking-[0.35em] text-white/70">JOKER</p>
-                  <h4 class="mt-2 text-lg font-black text-white">{{ joker.name }}</h4>
-                  <p class="mt-2 min-h-[56px] text-sm text-white/80">{{ joker.description }}</p>
-                  <button @click="sellJoker(joker)" class="mt-4 w-full rounded-2xl bg-rose-500 px-3 py-2 text-sm font-black text-white transition hover:bg-rose-400">
-                    出售 ${{ Math.floor(joker.price / 2) }}
-                  </button>
-                </div>
+                  <div class="setup-option-head">
+                    <h3>{{ option.name }}</h3>
+                    <span class="setup-option-badge">起始 ${{ option.startingMoney }}</span>
+                  </div>
+                  <p>{{ option.description }}</p>
+                </button>
+              </div>
+            </section>
+
+            <div class="setup-summary">
+              <div class="setup-summary-item">
+                <span class="setup-summary-label">起始牌组</span>
+                <span class="setup-summary-value">{{ selectedDeckConfig.name }}</span>
+              </div>
+              <div class="setup-summary-item">
+                <span class="setup-summary-label">难度</span>
+                <span class="setup-summary-value">{{ selectedDifficultyConfig.name }}</span>
+              </div>
+              <div class="setup-summary-item">
+                <span class="setup-summary-label">起始金币</span>
+                <span class="setup-summary-value gold">${{ selectedDifficultyConfig.startingMoney }}</span>
               </div>
             </div>
 
-            <div class="flex justify-end">
-              <button @click="closeShop" class="rounded-2xl bg-emerald-400 px-8 py-4 text-lg font-black text-slate-950 shadow-lg shadow-emerald-950/40 transition hover:bg-emerald-300">
-                返回盲注选择
-              </button>
+            <button @click="startRun" class="btn-primary-lg">
+              开始游戏
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== BLIND SELECT ========== -->
+      <div v-else-if="isBlindSelectPhase" key="blind-select" class="phase-panel">
+        <div class="blind-select-screen">
+          <div class="blind-select-top">
+            <div>
+              <h2 class="blind-select-title">选择盲注</h2>
+              <div class="blind-select-chips">
+                <span class="chip-tag muted">底注 {{ currentAnte }}/8</span>
+                <span class="chip-tag muted">第 {{ currentBlind + 1 }} 回合</span>
+              </div>
+            </div>
+            <div class="blind-select-right">
+              <span class="chip-tag gold">$ {{ money }}</span>
+              <span class="blind-select-progress">{{ currentBlindProgress }} 已完成</span>
             </div>
           </div>
 
-          <div v-else-if="isGameOverPhase" key="gameover" class="pixel-panel flex-1 px-6 py-10 text-center lg:px-8">
-            <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Run End</p>
-            <h2 class="mt-4 text-5xl font-black text-white">{{ gameWon ? '恭喜通关' : '游戏结束' }}</h2>
-            <div class="mx-auto mt-8 grid max-w-3xl gap-4 md:grid-cols-3">
-              <div class="result-card">
-                <p class="result-label">最终分数</p>
-                <p class="result-value">{{ totalScore }}</p>
+          <div class="blind-select-cards">
+            <button
+              v-for="blindOption in availableBlindOptions"
+              :key="blindOption.id"
+              @click="selectBlind(blindOption.id)"
+              :disabled="!blindOption.canChallenge"
+              class="blind-card"
+              :class="{
+                current: blindOption.isRecommended && blindOption.canChallenge,
+                cleared: blindOption.isCompleted,
+                locked: !blindOption.canChallenge,
+                small: blindOption.type === 'small',
+                big: blindOption.type === 'big',
+                boss: blindOption.type === 'boss'
+              }"
+            >
+              <span v-if="blindOption.isRecommended && blindOption.canChallenge" class="blind-card-tag">当前选择</span>
+              <span v-else-if="blindOption.type === 'boss'" class="blind-card-tag boss-tag">头目</span>
+              <div class="blind-card-icon">{{ blindOption.badge }}</div>
+              <h3 class="blind-card-title">{{ blindOption.name }}</h3>
+              <div class="blind-card-row">
+                <span>目标分数</span>
+                <span class="blind-card-val red">{{ blindOption.targetScore }}</span>
               </div>
-              <div class="result-card">
-                <p class="result-label">获得金币</p>
-                <p class="result-value text-amber-300">${{ money }}</p>
+              <div class="blind-card-row">
+                <span>奖励</span>
+                <span class="blind-card-val">{{ blindOption.rewardText }}</span>
               </div>
-              <div class="result-card">
-                <p class="result-label">持有 Joker</p>
-                <p class="result-value">{{ ownedJokers.length }}</p>
+              <div class="blind-card-action">
+                <span v-if="blindOption.isCompleted">已通关</span>
+                <span v-else-if="blindOption.canChallenge" class="text-gold">{{ blindOption.actionLabel }}</span>
+                <span v-else class="text-muted">需先完成前一项</span>
               </div>
-            </div>
-            <button @click="restart" class="mt-10 rounded-2xl bg-amber-400 px-10 py-4 text-xl font-black text-slate-950 shadow-lg shadow-amber-950/30 transition hover:bg-amber-300">
-              重新开始
             </button>
           </div>
 
-          <div v-else-if="isBattlePhase" key="game" class="flex flex-1 gap-4">
-            <div class="flex min-w-0 flex-1 flex-col gap-4">
-              <div class="relative flex-1 overflow-hidden rounded-[36px] border border-white/10 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.13),transparent_22%),radial-gradient(circle_at_80%_30%,rgba(255,255,255,0.1),transparent_18%),radial-gradient(circle_at_50%_85%,rgba(255,255,255,0.08),transparent_24%),linear-gradient(180deg,rgba(54,130,110,0.92),rgba(31,83,72,0.95))] shadow-[inset_0_0_0_2px_rgba(255,255,255,0.04),0_30px_80px_rgba(0,0,0,0.35)]">
-                <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,0.14),transparent_30%)] opacity-70"></div>
-                <div class="relative z-10 flex h-full min-h-[720px] flex-col px-4 py-4 lg:px-8 lg:py-6">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="hidden lg:block rounded-[28px] border border-white/10 bg-slate-950/20 px-4 py-3 backdrop-blur-sm">
-                      <p class="text-xs font-black uppercase tracking-[0.3em] text-white/70">当前盲注</p>
-                      <h2 class="mt-2 text-4xl font-black text-white">{{ blind.name }}</h2>
-                      <p class="mt-1 text-sm text-white/70">目标 {{ blind.targetScore }} · 奖励 {{ blind.rewardText }}</p>
-                    </div>
-                    <div class="ml-auto flex items-center gap-3 rounded-[28px] border border-white/10 bg-slate-950/20 px-4 py-3 backdrop-blur-sm">
-                      <div class="text-right">
-                        <p class="text-xs font-black uppercase tracking-[0.3em] text-white/60">牌堆</p>
-                        <p class="text-2xl font-black text-white">{{ drawPileCount }}/52</p>
-                      </div>
-                      <div class="deck-stack"></div>
-                    </div>
-                  </div>
+          <div class="bottom-bar">
+            <button
+              v-for="blindOption in availableBlindOptions.filter(b => b.isRecommended && b.canChallenge)"
+              :key="'btn-' + blindOption.id"
+              @click="selectBlind(blindOption.id)"
+              class="btn-primary"
+            >
+              选择盲注
+            </button>
+            <button class="btn-ghost">跳过盲注（$1）</button>
+          </div>
+        </div>
+      </div>
 
-                  <div class="mt-6 grid flex-1 gap-4 xl:grid-cols-[1fr_240px]">
-                    <div class="flex min-h-0 flex-col rounded-[34px] border border-white/6 bg-slate-950/10 p-4 backdrop-blur-[2px]">
-                      <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <p class="text-sm font-bold uppercase tracking-[0.3em] text-white/70">得分预览</p>
-                          <div class="mt-3 flex items-center gap-3">
-                            <div class="score-pill bg-sky-500 text-slate-950">{{ selectedScorePreview.handType ? selectedScorePreview.handType.chips : 0 }}</div>
-                            <div class="text-4xl font-black text-white">×</div>
-                            <div class="score-pill bg-rose-500 text-white">{{ selectedScorePreview.handType ? selectedScorePreview.handType.mult : 0 }}</div>
-                          </div>
-                        </div>
-                        <div class="text-right">
-                          <p class="text-sm font-bold uppercase tracking-[0.3em] text-white/70">牌型</p>
-                          <p class="mt-3 text-4xl font-black text-white">{{ selectedScorePreview.handType ? selectedScorePreview.handType.name : '未成型' }}</p>
-                          <p class="mt-1 text-sm text-white/70">总分预览 {{ selectedScorePreview.score }}</p>
-                        </div>
-                      </div>
+      <!-- ========== SHOP ========== -->
+      <div v-else-if="isShopPhase" key="shop" class="phase-panel">
+        <div class="shop-screen">
+          <div class="shop-top">
+            <h2 class="shop-title">商店</h2>
+            <div class="shop-top-right">
+              <span class="chip-tag gold">$ {{ money }}</span>
+              <button
+                @click="rerollShop"
+                :disabled="shopRefreshState.disabled"
+                class="btn-ghost-sm"
+                :class="{ disabled: shopRefreshState.disabled }"
+              >
+                刷新 · $1
+              </button>
+            </div>
+          </div>
 
-                      <div class="relative flex min-h-[240px] flex-1 items-center justify-center rounded-[28px] border border-white/8 bg-slate-950/12 px-4 py-8">
-                        <div v-if="showPlayedCards" class="flex flex-wrap justify-center gap-4">
-                          <div v-for="card in playedCards" :key="card.id" class="animate-fade-in-up">
-                            <PlayingCard :card="card" :selected="false" compact />
-                          </div>
-                        </div>
-                        <div v-else class="text-center">
-                          <p class="text-sm font-bold uppercase tracking-[0.3em] text-white/55">Center Stage</p>
-                          <p class="mt-3 text-5xl font-black text-white">{{ lastPlayedHand ? lastPlayedHand.name : '选择 5 张牌' }}</p>
-                          <p class="mt-3 text-lg text-white/70">{{ lastPlayedHand ? `上一手得分 ${lastScore}` : '打出牌组后，这里会展示当前结算' }}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="hidden xl:flex flex-col gap-4">
-                      <div class="rounded-[28px] border border-white/10 bg-slate-950/20 p-4 backdrop-blur-sm">
-                        <p class="text-xs font-black uppercase tracking-[0.35em] text-white/60">弃牌堆</p>
-                        <div class="mt-4 flex items-center justify-between">
-                          <div class="discard-stack"></div>
-                          <span class="text-3xl font-black text-white">{{ discardPileCount }}</span>
-                        </div>
-                      </div>
-                      <div class="rounded-[28px] border border-white/10 bg-slate-950/20 p-4 backdrop-blur-sm">
-                        <p class="text-xs font-black uppercase tracking-[0.35em] text-white/60">提示</p>
-                        <p class="mt-4 text-sm leading-relaxed text-white/70">参考图里的核心节奏是：先看左侧目标，再在底部挑 5 张，顶部 Joker 提供构筑加成，右侧牌堆与消耗品负责额外决策。</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="mt-6">
-                    <div class="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/10 bg-slate-950/20 px-5 py-4 backdrop-blur-sm">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-[0.35em] text-white/60">手牌区</p>
-                        <p class="mt-1 text-sm text-white/75">{{ selectedCards.length === 0 ? '点击牌选择' : `已选择 ${selectedCards.length} 张` }}</p>
-                      </div>
-                      <div class="flex flex-wrap gap-3">
-                        <button @click="sortHandByRank" class="mini-button">按点数</button>
-                        <button @click="sortHandBySuit" class="mini-button">按花色</button>
-                        <button @click="discardCards" :disabled="discardsLeft === 0 || selectedCards.length === 0" class="main-button disabled:bg-slate-700/70 disabled:text-slate-400 bg-slate-800 hover:bg-slate-700">
-                          弃牌
-                        </button>
-                        <button @click="playHand" :disabled="selectedCards.length !== 5" class="main-button disabled:bg-slate-700/70 disabled:text-slate-400 bg-amber-400 text-slate-950 hover:bg-amber-300">
-                          出牌
-                        </button>
-                      </div>
-                    </div>
-
-                    <div class="relative mx-auto flex min-h-[250px] max-w-[860px] items-end justify-center overflow-visible px-8 pb-8 pt-4">
-                      <PlayingCard
-                        v-for="(card, index) in hand"
-                        :key="card.id"
-                        :card="card"
-                        :selected="card.selected"
-                        compact
-                        @click="toggleCard(card)"
-                        :style="{
-                          transform: `translateX(${(index - (hand.length - 1) / 2) * 72}px) translateY(${Math.abs(index - (hand.length - 1) / 2) * 6}px) rotate(${(index - (hand.length - 1) / 2) * 4}deg)`,
-                          zIndex: card.selected ? 80 : index + 1
-                        }"
-                        class="hand-card"
-                      />
-                    </div>
-                  </div>
+          <div class="shop-for-sale">
+            <p class="shop-section-label">可购买</p>
+            <div class="shop-items">
+              <article
+                v-for="joker in shopOfferStates"
+                :key="joker.id"
+                class="shop-item-card"
+                :class="{ unavailable: !joker.canBuy }"
+              >
+                <div class="shop-item-art">J</div>
+                <h3 class="shop-item-name">{{ joker.name }}</h3>
+                <p class="shop-item-desc">{{ joker.description }}</p>
+                <div class="shop-item-bottom">
+                  <span class="shop-item-price">$ {{ joker.price }}</span>
+                  <button
+                    @click="buyJoker(joker)"
+                    :disabled="!joker.canBuy"
+                    class="btn-primary-sm"
+                    :class="{ disabled: !joker.canBuy }"
+                  >
+                    {{ joker.canBuy ? '购买' : joker.statusLabel }}
+                  </button>
                 </div>
+              </article>
+            </div>
+          </div>
+
+          <div class="shop-owned">
+            <p class="shop-section-label">已拥有 · {{ ownedJokers.length }} / {{ maxJokers }}</p>
+            <div class="shop-owned-row">
+              <div
+                v-for="joker in ownedJokers"
+                :key="joker.id"
+                class="joker-card-sm"
+                :class="getRarityBgColor(joker.rarity)"
+              >
+                <span class="joker-card-sm-emoji">🃏</span>
+                <span class="joker-card-sm-name">{{ joker.name }}</span>
+              </div>
+              <div
+                v-for="slot in maxJokers - ownedJokers.length"
+                :key="'empty-' + slot"
+                class="joker-card-sm empty-joker"
+              >
+                <span>+</span>
               </div>
             </div>
           </div>
 
-          <div v-else key="phase-skeleton" class="pixel-panel flex-1 px-6 py-10 lg:px-8">
-            <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-300">Run Phase</p>
-            <h2 class="mt-4 text-5xl font-black text-white">{{ runPhase }}</h2>
-            <p class="mt-4 max-w-3xl text-lg leading-relaxed text-slate-300">
-              这里先预留 2.0.0 后续页面骨架，当前只接通主 phase 切换，不展开 reward、pack 的具体内容。
-            </p>
+          <div class="bottom-bar">
+            <button
+              @click="rerollShop"
+              :disabled="shopRefreshState.disabled"
+              class="btn-warn"
+              :class="{ disabled: shopRefreshState.disabled }"
+            >
+              刷新
+            </button>
+            <button @click="closeShop" class="btn-success">下一回合</button>
           </div>
-        </Transition>
-      </main>
-    </div>
+        </div>
+      </div>
 
+      <!-- ========== GAME OVER ========== -->
+      <div v-else-if="isGameOverPhase" key="gameover" class="phase-panel gameover-bg">
+        <div class="gameover-panel" :class="{ win: gameWon }">
+          <h2 class="gameover-title" :class="{ win: gameWon }">
+            {{ gameWon ? '挑战胜利' : '挑战失败' }}
+          </h2>
+          <p class="gameover-sub">
+            {{ gameWon ? '击败全部 8 层底注' : `你未能击败 ${blind.name}` }}
+          </p>
+          <div class="gameover-stats">
+            <div class="gameover-stat">
+              <span class="gameover-stat-label">{{ gameWon ? '最终得分' : '得分' }}</span>
+              <span class="gameover-stat-value" :class="{ gold: gameWon, red: !gameWon }">{{ totalScore }}</span>
+            </div>
+            <div class="gameover-stat">
+              <span class="gameover-stat-label">获得金币</span>
+              <span class="gameover-stat-value gold">${{ money }}</span>
+            </div>
+            <div class="gameover-stat">
+              <span class="gameover-stat-label">持有 Joker</span>
+              <span class="gameover-stat-value">{{ ownedJokers.length }}</span>
+            </div>
+          </div>
+          <div class="gameover-actions">
+            <button @click="restart" class="btn-primary-lg">重新开局</button>
+            <button @click="restart" class="btn-ghost-lg">返回主菜单</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== BATTLE ========== -->
+      <div v-else-if="isBattlePhase" key="game" class="battle-screen">
+        <!-- 顶部 HUD -->
+        <div class="hud">
+          <!-- 盲注信息 -->
+          <div class="hud-blind">
+            <div class="hud-blind-icon">{{ blind.badge }}</div>
+            <div>
+              <span class="hud-blind-name">{{ blind.name }}</span>
+              <span class="hud-blind-req">{{ blind.targetScore }}</span>
+            </div>
+          </div>
+
+          <!-- 筹码 × 倍率 -->
+          <div class="hud-score">
+            <div class="hud-score-col chips">
+              <span class="hud-score-val chips-color">{{ selectedScorePreview.handType ? selectedScorePreview.handType.chips : 0 }}</span>
+              <span class="hud-score-label">筹码</span>
+            </div>
+            <div class="hud-score-col mult">
+              <span class="hud-score-val mult-color">×{{ selectedScorePreview.handType ? selectedScorePreview.handType.mult : 1 }}</span>
+              <span class="hud-score-label">倍率</span>
+            </div>
+          </div>
+
+          <!-- 元数据 -->
+          <div class="hud-meta">
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">回合</span>
+              <span class="hud-meta-val">{{ currentBlind + 1 }}</span>
+            </div>
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">底注</span>
+              <span class="hud-meta-val">{{ currentAnte }}/8</span>
+            </div>
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">手数</span>
+              <span class="hud-meta-val green">{{ handsLeft }}</span>
+            </div>
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">弃牌</span>
+              <span class="hud-meta-val blue">{{ discardsLeft }}</span>
+            </div>
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">牌库</span>
+              <span class="hud-meta-val">{{ drawPileCount }}/52</span>
+            </div>
+            <div class="hud-meta-item">
+              <span class="hud-meta-label">金钱</span>
+              <span class="hud-meta-val">${{ money }}</span>
+            </div>
+          </div>
+
+          <!-- 进度条 -->
+          <div class="hud-progress">
+            <div class="hud-progress-bar">
+              <div
+                class="hud-progress-fill"
+                :style="{ width: `${Math.min((totalScore / blind.targetScore) * 100, 100)}%` }"
+              ></div>
+            </div>
+            <span class="hud-progress-text">{{ totalScore }} / {{ blind.targetScore }}</span>
+          </div>
+        </div>
+
+        <!-- Joker 区 -->
+        <div class="joker-bar">
+          <div
+            v-for="joker in ownedJokers"
+            :key="joker.id"
+            class="joker-chip"
+            :class="getRarityBgColor(joker.rarity)"
+          >
+            <span class="joker-chip-face">🃏</span>
+            <span class="joker-chip-name">{{ joker.name }}</span>
+          </div>
+          <div
+            v-for="slot in maxJokers - ownedJokers.length"
+            :key="'joker-slot-' + slot"
+            class="joker-chip empty"
+          >
+            <span class="joker-chip-face">+</span>
+            <span>空位</span>
+          </div>
+        </div>
+
+        <!-- 出牌预览区 -->
+        <div class="play-table">
+          <div v-if="showPlayedCards && playedCards.length > 0" class="play-table-scored">
+            <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
+            <div class="play-table-cards">
+              <PlayingCard
+                v-for="card in playedCards"
+                :key="card.id"
+                :card="card"
+                :selected="false"
+                compact
+              />
+            </div>
+            <p class="play-table-score">+ {{ lastScore }}</p>
+          </div>
+          <div v-else-if="selectedCardCount > 0" class="play-table-preview">
+            <p class="play-table-placeholder">出牌预览</p>
+            <div class="play-table-cards">
+              <PlayingCard
+                v-for="card in selectedCards"
+                :key="card.id"
+                :card="card"
+                :selected="true"
+                compact
+              />
+            </div>
+            <span class="chip-tag purple" v-if="selectedScorePreview.handType">
+              {{ selectedScorePreview.handType.name }} · ≈{{ selectedScorePreview.score }}
+            </span>
+          </div>
+          <div v-else class="play-table-idle">
+            <span class="play-table-placeholder">选择 5 张手牌组成牌型</span>
+          </div>
+        </div>
+
+        <!-- 手牌扇区 -->
+        <div class="hand-area">
+          <div class="hand-area-header">
+            <span class="hand-area-label">
+              手牌 · 已选 {{ selectedCardCount }} / 5
+              <span v-if="selectionStatus.tone === 'ready'" class="hand-ready">可出牌</span>
+              <span v-else-if="selectionStatus.tone === 'building'" class="hand-building">继续选牌</span>
+            </span>
+            <div class="hand-area-sorts">
+              <button @click="sortHandByRank" class="btn-sort">按点数</button>
+              <button @click="sortHandBySuit" class="btn-sort">按花色</button>
+              <button @click="showHandInfo = true" class="btn-sort info">比赛信息</button>
+            </div>
+          </div>
+          <div class="hand-fan">
+            <PlayingCard
+              v-for="(card, index) in hand"
+              :key="card.id"
+              :card="card"
+              :selected="card.selected"
+              :selectable="true"
+              compact
+              @click="toggleCard(card)"
+              :style="{
+                transform: `translateX(${(index - (hand.length - 1) / 2) * 62}px) translateY(${card.selected ? -34 : Math.abs(index - (hand.length - 1) / 2) * 6}px) rotate(${(index - (hand.length - 1) / 2) * 4}deg)`,
+                zIndex: card.selected ? 80 + index : index + 1
+              }"
+              class="hand-card"
+            />
+          </div>
+        </div>
+
+        <!-- 底部操作栏 -->
+        <div class="bottom-bar">
+          <button
+            @click="playHand"
+            :disabled="!canPlaySelectedCards"
+            class="btn-primary"
+            :class="{ disabled: !canPlaySelectedCards }"
+          >
+            {{ canPlaySelectedCards ? '出牌' : `还差 ${cardsNeededToPlay} 张` }}
+          </button>
+          <button
+            @click="discardCards"
+            :disabled="discardsLeft === 0 || selectedCardCount === 0"
+            class="btn-warn"
+            :class="{ disabled: discardsLeft === 0 || selectedCardCount === 0 }"
+          >
+            弃牌
+          </button>
+          <button class="btn-ghost">取消选择</button>
+        </div>
+      </div>
+
+      <!-- ========== FALLBACK ========== -->
+      <div v-else key="phase-skeleton" class="phase-panel phase-skeleton">
+        <p class="skeleton-eyebrow">Run Phase</p>
+        <h2 class="skeleton-title">{{ runPhase }}</h2>
+        <p class="skeleton-desc">
+          这里先预留后续页面骨架，当前只接通主 phase 切换。
+        </p>
+      </div>
+    </Transition>
+
+    <!-- 比赛信息弹窗 -->
     <Transition name="fade">
-      <div v-if="showHandInfo" class="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-        <div class="info-modal w-full max-w-5xl rounded-[40px] border border-white/10 bg-[#32454c] p-6 shadow-[0_40px_120px_rgba(0,0,0,0.45)] lg:p-8">
-          <div class="mb-6 flex flex-wrap items-center gap-3">
-            <button class="tab-button active">牌型</button>
-            <button class="tab-button">盲注</button>
-            <button class="tab-button">优惠券</button>
-            <button class="tab-button">赌注</button>
+      <div v-if="showHandInfo" class="modal-overlay" @click.self="showHandInfo = false">
+        <div class="info-modal">
+          <div class="info-modal-tabs">
+            <button class="info-tab active">牌型</button>
+            <button class="info-tab">盲注</button>
+            <button class="info-tab">优惠券</button>
+            <button class="info-tab">赌注</button>
           </div>
-          <div class="space-y-3">
-            <div v-for="row in handInfoRows" :key="row.name" class="hand-info-row">
-              <div class="hand-level">等级{{ row.level }}</div>
-              <div class="hand-name">{{ row.name }}</div>
-              <div class="hand-math">
-                <span class="chips">{{ row.chips }}</span>
-                <span class="mult">×{{ row.mult }}</span>
+          <div class="info-modal-rows">
+            <div v-for="row in handInfoRows" :key="row.name" class="info-row">
+              <div class="info-row-level">等级{{ row.level }}</div>
+              <div class="info-row-name">{{ row.name }}</div>
+              <div class="info-row-math">
+                <span class="info-row-chips">{{ row.chips }}</span>
+                <span class="info-row-mult">×{{ row.mult }}</span>
               </div>
-              <div class="hand-played"># {{ row.played }}</div>
+              <div class="info-row-played"># {{ row.played }}</div>
             </div>
           </div>
-          <div class="mt-8 flex justify-center">
-            <button @click="showHandInfo = false" class="rounded-[20px] bg-amber-400 px-16 py-4 text-2xl font-black text-slate-950 shadow-lg shadow-black/20 transition hover:bg-amber-300">返回</button>
-          </div>
+          <button @click="showHandInfo = false" class="btn-primary-lg info-modal-close">返回</button>
         </div>
       </div>
     </Transition>
@@ -898,396 +1023,1183 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* =====================================================
+   CSS Variables & Global
+   ===================================================== */
 .balatro-shell {
-  background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.1), transparent 28%),
-    linear-gradient(180deg, #081219 0%, #071019 100%);
-}
+  --bg: #0e0716;
+  --panel: #1f1130;
+  --panel-2: #2a1a3f;
+  --line: #43295e;
+  --text: #f6efe1;
+  --text-dim: #c9b8d8;
+  --muted: #8e7aa8;
+  --gold: #ffd166;
+  --money: #ffc857;
+  --red: #ef476f;
+  --blue: #38c5ff;
+  --green: #62d18b;
+  --purple: #b388ff;
+  --chips: #5ac8fa;
+  --mult: #ff5e7e;
 
-.pixel-panel {
-  border-radius: 34px;
-  border: 1px solid rgba(94, 234, 212, 0.2);
-  background: linear-gradient(180deg, rgba(28, 39, 52, 0.96) 0%, rgba(17, 24, 36, 0.96) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 18px 40px rgba(0, 0, 0, 0.35);
-}
-
-.blind-chip {
-  border-radius: 18px;
-  background: linear-gradient(180deg, #1f9cf0, #1678d4);
-  padding: 14px 18px;
-  font-size: 1.9rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  color: white;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18);
-}
-
-.score-track {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  height: 100vh;
   overflow: hidden;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(122, 80, 188, 0.20), transparent 60%),
+    radial-gradient(900px 600px at 100% 30%, rgba(56, 197, 255, 0.10), transparent 60%),
+    linear-gradient(180deg, #0a0512 0%, #0e0716 50%, #0a0512 100%);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'PingFang SC', sans-serif;
 }
 
-.chips-lane,
-.mult-lane {
-  padding: 18px 12px;
+/* =====================================================
+   Toast
+   ===================================================== */
+.toast-bar {
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 50;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(0,0,0,.45);
+}
+.toast--info    { background: #38c5ff; color: #0a1a24; }
+.toast--success { background: #62d18b; color: #0a1a24; }
+.toast--error   { background: #ef476f; color: #fff; }
+.toast--warning { background: #ffc857; color: #2a1700; }
+
+/* =====================================================
+   Phase Panel (shared)
+   ===================================================== */
+.phase-panel {
+  height: 100%;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+/* =====================================================
+   Buttons (shared)
+   ===================================================== */
+.btn-primary,
+.btn-primary-lg,
+.btn-primary-sm,
+.btn-ghost,
+.btn-ghost-lg,
+.btn-ghost-sm,
+.btn-warn,
+.btn-success,
+.btn-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.btn-primary:hover:not(.disabled),
+.btn-primary-lg:hover:not(.disabled),
+.btn-primary-sm:hover:not(.disabled),
+.btn-ghost:hover:not(.disabled),
+.btn-ghost-lg:hover:not(.disabled),
+.btn-ghost-sm:hover:not(.disabled),
+.btn-warn:hover:not(.disabled),
+.btn-success:hover:not(.disabled) {
+  transform: translateY(-2px);
+}
+.btn-primary.disabled,
+.btn-primary-lg.disabled,
+.btn-primary-sm.disabled,
+.btn-warn.disabled,
+.btn-ghost.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary,
+.btn-primary-lg,
+.btn-primary-sm {
+  background: linear-gradient(180deg, #ff5e7e, #d6234a);
+  color: #fff;
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 4px 0 rgba(0,0,0,.4);
+}
+.btn-primary    { padding: 12px 24px; font-size: 13px; }
+.btn-primary-lg { padding: 16px 32px; font-size: 15px; border-radius: 14px; }
+.btn-primary-sm { padding: 8px 16px; font-size: 11px; border-radius: 10px; }
+
+.btn-ghost,
+.btn-ghost-lg,
+.btn-ghost-sm {
+  background: rgba(255,255,255,.05);
+  color: var(--text);
+  border-color: rgba(255,255,255,.12);
+  box-shadow: 0 4px 0 rgba(0,0,0,.4);
+}
+.btn-ghost    { padding: 12px 24px; font-size: 13px; }
+.btn-ghost-lg { padding: 16px 32px; font-size: 15px; border-radius: 14px; }
+.btn-ghost-sm { padding: 8px 16px; font-size: 11px; border-radius: 10px; }
+
+.btn-warn {
+  background: linear-gradient(180deg, #ffc857, #e3a03c);
+  color: #2a1700;
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 4px 0 rgba(0,0,0,.4);
+  padding: 12px 24px;
+  font-size: 13px;
+}
+
+.btn-success {
+  background: linear-gradient(180deg, #62d18b, #2a9d57);
+  color: #fff;
+  border-color: rgba(255,255,255,.18);
+  box-shadow: 0 4px 0 rgba(0,0,0,.4);
+  padding: 12px 24px;
+  font-size: 13px;
+}
+
+.btn-sort {
+  background: rgba(255,255,255,.08);
+  color: var(--text-dim);
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: none;
+  padding: 6px 12px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+.btn-sort:hover { color: #fff; border-color: var(--purple); }
+.btn-sort.info { background: rgba(239,71,111,.15); color: var(--red); border-color: rgba(239,71,111,.3); }
+
+/* =====================================================
+   Chip Tags
+   ===================================================== */
+.chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.chip-tag.gold   { background: rgba(255,209,102,.15); color: var(--gold); border: 1px solid rgba(255,209,102,.3); }
+.chip-tag.muted  { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid rgba(255,255,255,.08); }
+.chip-tag.purple { background: rgba(179,136,255,.15); color: var(--purple); border: 1px solid rgba(179,136,255,.3); }
+
+/* =====================================================
+   Phase Skeleton (fallback)
+   ===================================================== */
+.phase-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  font-size: 2.6rem;
+}
+.skeleton-eyebrow {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.skeleton-title {
+  margin-top: 16px;
+  font-size: 3rem;
   font-weight: 900;
 }
-
-.chips-lane {
-  background: linear-gradient(180deg, #21a6f0, #1f7ed2);
-  color: #081019;
+.skeleton-desc {
+  margin-top: 16px;
+  max-width: 720px;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: var(--text-dim);
 }
 
-.mult-lane {
-  background: linear-gradient(180deg, #ff5f58, #eb453d);
-  color: white;
+/* =====================================================
+   SETUP
+   ===================================================== */
+.setup-layout {
+  max-width: 960px;
+  margin: 0 auto;
+  display: grid;
+  gap: 40px;
+}
+.setup-hero {
+  text-align: center;
+}
+.setup-title {
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: 6px;
+  text-shadow: 0 4px 0 #6b3fa0, 0 0 24px rgba(255,209,102,.4);
+}
+.setup-sub {
+  margin-top: 10px;
+  font-size: 18px;
+  color: var(--text-dim);
+}
+.setup-cards {
+  margin-top: 32px;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
 }
 
-.action-pill {
-  border-radius: 24px;
-  padding: 16px 12px;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.14);
+/* Demo cards */
+.card-demo {
+  width: 88px;
+  height: 124px;
+  border-radius: 12px;
+  background: #fff8ec;
+  color: #2a1c33;
+  box-shadow: 0 6px 0 rgba(0,0,0,.45), 0 0 0 2px #2a1c33;
+  position: relative;
+  flex-shrink: 0;
 }
+.card-demo .card-corner {
+  position: absolute;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+.card-demo .card-corner.tl { top: 8px; left: 8px; }
+.card-demo .card-corner.br { bottom: 8px; right: 8px; transform: rotate(180deg); }
+.card-demo .card-pip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 50px;
+}
+.card-demo.red, .card-demo.red .card-pip { color: #d6234a; }
+.card-demo.black, .card-demo.black .card-pip { color: #1a1024; }
+.card-demo.tilt-l { transform: rotate(-3deg); }
+.card-demo.tilt-r { transform: rotate(3deg); }
 
-.menu-button {
-  border-radius: 24px;
-  padding: 18px 20px;
+.setup-options {
+  display: grid;
+  gap: 24px;
+}
+.setup-section {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 22px;
+  background: var(--panel);
+  padding: 24px;
+}
+.setup-section-label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.setup-option-list {
+  display: grid;
+  gap: 12px;
+}
+.setup-option-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  background: rgba(255,255,255,.03);
+  padding: 18px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.setup-option-card:hover {
+  border-color: var(--purple);
+}
+.setup-option-card.active {
+  border-color: rgba(179,136,255,.5);
+  background: rgba(179,136,255,.1);
+}
+.setup-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.setup-option-head h3 {
   font-size: 1.4rem;
   font-weight: 900;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+}
+.setup-option-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.setup-option-card p {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-dim);
 }
 
-.menu-button:hover {
-  transform: translateY(-2px);
-}
-
-.setup-option,
-.blind-select-card {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 28px;
-  background: rgba(15, 23, 42, 0.48);
+.setup-summary {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  background: var(--panel);
   padding: 20px;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+.setup-summary-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.setup-summary-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.setup-summary-value {
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+.setup-summary-value.gold { color: var(--gold); }
+
+/* =====================================================
+   BLIND SELECT
+   ===================================================== */
+.blind-select-screen {
+  max-width: 960px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.blind-select-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.blind-select-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+.blind-select-chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.blind-select-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.blind-select-progress {
+  font-size: 12px;
+  color: var(--muted);
+}
+.blind-select-cards {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 0;
+  overflow-x: auto;
+  padding-bottom: 8px;
 }
 
-.setup-option:hover,
-.blind-select-card:hover:not(:disabled) {
-  transform: translateY(-2px);
+/* Blind card */
+.blind-card {
+  width: 220px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--panel-2), #190d28);
+  border: 3px solid var(--line);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  color: var(--text);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 12px 24px rgba(0,0,0,.45);
+  flex-shrink: 0;
 }
-
-.setup-option.active,
-.blind-select-card.active {
-  border-color: rgba(52, 211, 153, 0.7);
-  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+.blind-card:hover:not(.locked):not(.cleared) {
+  transform: translateY(-4px);
 }
-
-.blind-select-card.cleared {
-  border-color: rgba(52, 211, 153, 0.45);
+.blind-card.current {
+  transform: translateY(-18px);
+  border-color: var(--gold);
+  box-shadow: 0 18px 0 rgba(0,0,0,.45), 0 0 0 4px rgba(255,209,102,.25);
 }
-
-.blind-select-card.locked {
-  opacity: 0.55;
+.blind-card.cleared {
+  border-color: rgba(98,209,139,.4);
+  background: linear-gradient(180deg, #1a2a1f, #0d1a12);
+  opacity: 0.7;
 }
-
-.blind-select-card:disabled {
+.blind-card.locked {
+  opacity: 0.45;
   cursor: not-allowed;
 }
+.blind-card-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  border: 4px solid #1a1024;
+  box-shadow: inset 0 -6px 0 rgba(0,0,0,.3);
+}
+.blind-card.small .blind-card-icon  { background: radial-gradient(circle at 30% 30%, #62d18b, #1a7c45); }
+.blind-card.big .blind-card-icon    { background: radial-gradient(circle at 30% 30%, #ffc857, #c47b15); }
+.blind-card.boss .blind-card-icon   { background: radial-gradient(circle at 30% 30%, #ef476f, #7a1f37); }
+.blind-card-title {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.blind-card-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-top: 1px dashed rgba(255,255,255,.12);
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-dim);
+}
+.blind-card-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--gold);
+}
+.blind-card-val.red { color: var(--red); }
+.blind-card-tag {
+  position: absolute;
+  top: -12px;
+  background: var(--gold);
+  color: #2a1700;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 2px solid #2a1700;
+  letter-spacing: 1px;
+}
+.blind-card-tag.boss-tag {
+  background: var(--red);
+  color: #fff;
+  border-color: #1a1024;
+}
+.blind-card-action {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.text-gold { color: var(--gold); }
+.text-muted { color: var(--muted); }
 
-.joker-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(15, 23, 42, 0.35));
+/* =====================================================
+   SHOP
+   ===================================================== */
+.shop-screen {
+  max-width: 1000px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.shop-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.shop-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+.shop-top-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.shop-section-label {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.shop-for-sale {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.shop-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.shop-item-card {
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--panel-2), #14091f);
+  border: 2px solid var(--line);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 12px 24px rgba(0,0,0,.45);
+}
+.shop-item-card.unavailable {
+  opacity: 0.6;
+}
+.shop-item-art {
+  height: 100px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffd57a, #f08a3a);
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #2a1700;
+  border: 2px solid #1a1024;
+}
+.shop-item-name {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.shop-item-desc {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.shop-item-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+.shop-item-price {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--money);
+}
+.shop-owned {
+  min-height: 0;
+}
+.shop-owned-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.joker-card-sm {
+  width: 80px;
+  height: 100px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px solid #1a1024;
+  box-shadow: 0 5px 0 rgba(0,0,0,.45);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+  background: linear-gradient(180deg, #ffd57a, #f08a3a);
+  color: #2a1700;
+}
+.joker-card-sm.empty-joker {
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, rgba(255,255,255,.08) 6px 12px);
+  color: var(--muted);
+  border: 2px dashed rgba(255,255,255,.18);
+  box-shadow: none;
+}
+.joker-card-sm-emoji {
+  font-size: 24px;
+}
+.joker-card-sm-name {
+  font-size: 9px;
+  letter-spacing: 1px;
+  line-height: 1.1;
 }
 
-.joker-empty {
+/* =====================================================
+   GAME OVER
+   ===================================================== */
+.gameover-bg {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.consumable-card,
-.deck-stack,
-.discard-stack {
-  position: relative;
-}
-
-.deck-stack::before,
-.deck-stack::after,
-.discard-stack::before,
-.discard-stack::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 18px;
-}
-
-.deck-stack,
-.discard-stack {
-  width: 84px;
-  height: 118px;
-  border-radius: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.55);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(214, 228, 255, 0.95)),
-    linear-gradient(145deg, #ef476f, #118ab2);
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.28);
+    radial-gradient(60% 60% at 50% 40%, rgba(239,71,111,.18), transparent 70%),
+    linear-gradient(180deg, #1a0610, #0a0210);
 }
-
-.deck-stack::before,
-.discard-stack::before {
-  transform: translate(-10px, -8px);
-  background: rgba(255, 255, 255, 0.45);
-  z-index: -2;
-}
-
-.deck-stack::after,
-.discard-stack::after {
-  transform: translate(-5px, -4px);
-  background: rgba(255, 255, 255, 0.7);
-  z-index: -1;
-}
-
-.score-pill {
-  min-width: 140px;
+.gameover-panel {
+  width: min(520px, 90%);
+  background: linear-gradient(180deg, var(--panel), #0d0617);
+  border: 3px solid rgba(239,71,111,.5);
   border-radius: 24px;
-  padding: 18px 18px;
+  padding: 36px 28px;
   text-align: center;
-  font-size: 2.6rem;
+  box-shadow: 0 12px 24px rgba(0,0,0,.45);
+}
+.gameover-panel.win {
+  border-color: rgba(255,209,102,.55);
+}
+.gameover-title {
+  font-size: 36px;
   font-weight: 900;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15);
+  color: var(--red);
+  letter-spacing: 4px;
+  text-shadow: 0 4px 0 #6b1f33;
+}
+.gameover-title.win {
+  color: var(--gold);
+  text-shadow: 0 4px 0 #6b3fa0, 0 0 24px rgba(255,209,102,.6);
+}
+.gameover-sub {
+  margin-top: 10px;
+  font-size: 16px;
+  color: var(--text-dim);
+}
+.gameover-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 16px;
+  margin: 28px 0;
+}
+.gameover-stat {
+  text-align: center;
+}
+.gameover-stat-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.gameover-stat-value {
+  font-size: 32px;
+  font-weight: 900;
+}
+.gameover-stat-value.gold { color: var(--gold); }
+.gameover-stat-value.red  { color: var(--red); }
+.gameover-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 24px;
 }
 
-.mini-button {
+/* =====================================================
+   BATTLE SCREEN
+   ===================================================== */
+.battle-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 8px;
+  background:
+    radial-gradient(80% 60% at 50% 20%, rgba(122,80,188,.18), transparent 60%),
+    radial-gradient(60% 60% at 50% 110%, rgba(56,197,255,.08), transparent 60%),
+    linear-gradient(180deg, #1a0c2c, #0e0617 90%);
+}
+
+/* HUD */
+.hud {
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  gap: 10px;
+  align-items: stretch;
+}
+.hud-blind {
+  background: linear-gradient(180deg, var(--panel-2), #1a0f24);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.hud-blind-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ef476f, #8a1f3a);
+  border: 2px solid #1a1024;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+}
+.hud-blind-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.hud-blind-req {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--red);
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.hud-score {
+  background: #0a0414;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.hud-score-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--panel), #14091f);
+  border-radius: 10px;
+  padding: 6px;
+}
+.hud-score-col.chips { box-shadow: inset 0 0 0 2px rgba(90,200,250,.45); }
+.hud-score-col.mult  { box-shadow: inset 0 0 0 2px rgba(255,94,126,.55); }
+.hud-score-val {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+.chips-color { color: var(--chips); }
+.mult-color  { color: var(--mult); }
+.hud-score-label {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-dim);
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+.hud-meta {
+  background: linear-gradient(180deg, var(--panel-2), #1a0f24);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+  align-content: center;
+}
+.hud-meta-item {
+  display: flex;
+  flex-direction: column;
+}
+.hud-meta-label {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+.hud-meta-val {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--gold);
+  line-height: 1;
+}
+.hud-meta-val.green { color: var(--green); }
+.hud-meta-val.blue  { color: var(--blue); }
+
+/* HUD progress */
+.hud-progress {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hud-progress-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.3);
+  overflow: hidden;
+}
+.hud-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f59e0b, #fde68a);
+  box-shadow: 0 0 12px rgba(245,158,11,.4);
+  transition: width 0.3s ease;
+}
+.hud-progress-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* Joker bar */
+.joker-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: linear-gradient(180deg, #14091f, #0a0414);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  align-self: flex-start;
+}
+.joker-chip {
+  width: 78px;
+  height: 100px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffd57a, #f08a3a);
+  color: #2a1700;
+  border: 2px solid #1a1024;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: 0 5px 0 rgba(0,0,0,.45);
+}
+.joker-chip.empty {
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.04) 0 6px, rgba(255,255,255,.08) 6px 12px);
+  color: var(--muted);
+  border: 2px dashed rgba(255,255,255,.18);
+  box-shadow: none;
+}
+.joker-chip-face {
+  font-size: 26px;
+}
+.joker-chip-name {
+  font-size: 9px;
+  letter-spacing: 1px;
+  line-height: 1.1;
+}
+
+/* Play table */
+.play-table {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgba(255,255,255,.08);
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(245, 158, 11, 0.95);
-  padding: 10px 18px;
-  font-size: 0.95rem;
+  background: linear-gradient(180deg, rgba(56,197,255,.04), rgba(255,94,126,.04));
+  text-align: center;
+  overflow-y: auto;
+}
+.play-table-idle,
+.play-table-preview,
+.play-table-scored {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+.play-table-placeholder {
+  font-size: 13px;
   font-weight: 900;
-  color: #111827;
+  color: var(--muted);
+  letter-spacing: 1px;
 }
-
-.main-button {
-  border-radius: 18px;
-  padding: 14px 26px;
-  font-size: 1.1rem;
+.play-table-cards {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.play-table-hand-type {
+  font-size: 20px;
   font-weight: 900;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.2);
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+.play-table-score {
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(255,209,102,.5);
 }
 
-.main-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+/* Hand area */
+.hand-area {
+  min-height: 0;
 }
-
+.hand-area-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.hand-area-label {
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+.hand-ready {
+  color: var(--green);
+  margin-left: 6px;
+}
+.hand-building {
+  color: var(--blue);
+  margin-left: 6px;
+}
+.hand-area-sorts {
+  display: flex;
+  gap: 6px;
+}
+.hand-fan {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding: 8px 0 4px;
+  min-height: 140px;
+}
 .hand-card {
   position: absolute;
   left: 50%;
   bottom: 0;
   transform-origin: bottom center;
-  margin-left: -55px;
+  margin-left: -48px;
 }
 
-.result-card {
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.5);
-  padding: 24px 20px;
+/* Bottom bar */
+.bottom-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 4px 0;
 }
 
-.result-label {
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65);
+/* =====================================================
+   INFO MODAL
+   ===================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.55);
+  padding: 16px;
+  backdrop-filter: blur(8px);
 }
-
-.result-value {
-  margin-top: 12px;
-  font-size: 2.5rem;
-  font-weight: 900;
-  color: white;
-}
-
 .info-modal {
-  background:
-    linear-gradient(180deg, rgba(66, 92, 101, 0.98), rgba(42, 59, 66, 0.98));
+  width: 100%;
+  max-width: 800px;
+  border-radius: 24px;
+  border: 3px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), #0d0617);
+  padding: 28px;
+  box-shadow: 0 40px 120px rgba(0,0,0,.45);
 }
-
-.tab-button {
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ff6257, #f04f47);
-  padding: 14px 28px;
-  font-size: 1.8rem;
+.info-modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.info-tab {
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ef476f, #8a1f3a);
+  padding: 12px 24px;
+  font-size: 1rem;
   font-weight: 900;
-  color: white;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.18);
+  letter-spacing: 1px;
 }
-
-.tab-button.active {
+.info-tab.active {
   transform: translateY(-2px);
 }
-
-.hand-info-row {
+.info-modal-rows {
   display: grid;
-  grid-template-columns: 180px 1fr 240px 100px;
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.info-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 180px 80px;
   align-items: center;
-  gap: 18px;
-  border-radius: 22px;
-  background: rgba(235, 239, 245, 0.96);
-  padding: 12px 18px;
-  color: #1f2937;
-  box-shadow: inset 0 -2px 0 rgba(148, 163, 184, 0.35);
+  gap: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.04);
+  padding: 12px 16px;
+  border: 1px solid rgba(255,255,255,.06);
 }
-
-.hand-level {
+.info-row-level {
   border-radius: 999px;
-  background: white;
-  padding: 10px 16px;
+  background: var(--panel-2);
+  padding: 8px 14px;
   text-align: center;
-  font-size: 1.8rem;
+  font-size: 1.1rem;
   font-weight: 900;
 }
-
-.hand-name {
-  font-size: 2rem;
+.info-row-name {
+  font-size: 1.2rem;
   font-weight: 900;
 }
-
-.hand-math {
+.info-row-math {
   display: grid;
   grid-template-columns: 1fr 1fr;
   overflow: hidden;
   border-radius: 999px;
 }
-
-.hand-math .chips,
-.hand-math .mult {
-  padding: 10px 18px;
-  text-align: center;
-  font-size: 2rem;
-  font-weight: 900;
-}
-
-.hand-math .chips {
+.info-row-chips {
   background: #1f9cf0;
-  color: white;
-}
-
-.hand-math .mult {
-  background: #ff5f58;
-  color: white;
-}
-
-.hand-played {
-  text-align: right;
-  font-size: 2rem;
+  color: #fff;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: 1.1rem;
   font-weight: 900;
-  color: #f59e0b;
+}
+.info-row-mult {
+  background: #ff5f58;
+  color: #fff;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+.info-row-played {
+  text-align: right;
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--money);
+}
+.info-modal-close {
+  display: block;
+  margin: 24px auto 0;
 }
 
-.animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out;
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.toast-enter-active {
-  animation: toast-in 0.3s ease-out;
-}
-
-.toast-leave-active {
-  animation: toast-out 0.3s ease-in;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-}
-
+/* =====================================================
+   Transitions
+   ===================================================== */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
 }
-
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
 }
 
-@media (max-width: 1279px) {
-  .hand-card {
-    margin-left: -48px;
+.toast-enter-active {
+  animation: toast-in 0.3s ease-out;
+}
+.toast-leave-active {
+  animation: toast-out 0.3s ease-in;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
+
+/* =====================================================
+   Responsive
+   ===================================================== */
+@media (max-width: 1024px) {
+  .hud {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hud-meta {
+    grid-column: 1 / -1;
+  }
+  .hud-progress {
+    grid-column: 1 / -1;
+  }
+  .joker-bar {
+    display: none;
+  }
+  .bl ind-select-cards {
+    flex-wrap: wrap;
+  }
+  .shop-items {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 }
 
-@media (max-width: 1024px) {
-  .score-pill {
-    min-width: 110px;
-    font-size: 2rem;
+@media (max-width: 640px) {
+  .phase-panel {
+    padding: 16px;
   }
-
-  .tab-button {
-    font-size: 1.3rem;
-    padding: 12px 20px;
+  .hud {
+    grid-template-columns: 1fr;
   }
-
-  .hand-info-row {
+  .battle-screen {
+    padding: 8px;
+    gap: 6px;
+  }
+  .bottom-bar {
+    flex-wrap: wrap;
+  }
+  .blind-select-cards {
+    flex-direction: column;
+    align-items: center;
+  }
+  .gameover-stats {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .setup-hero .setup-title {
+    font-size: 32px;
+  }
+  .info-row {
     grid-template-columns: 1fr;
     text-align: center;
   }
-
-  .hand-played {
+  .info-row-played {
     text-align: center;
   }
 }
-
-@media (max-width: 768px) {
-  .main-button {
-    width: 100%;
-  }
-
-  .score-pill {
-    min-width: 96px;
-    font-size: 1.6rem;
-  }
-
-  .hand-card {
-    margin-left: -42px;
-  }
-}
 </style>
-

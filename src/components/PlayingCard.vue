@@ -9,12 +9,19 @@ const props = defineProps({
   selected: {
     type: Boolean,
     default: false
+  },
+  selectable: {
+    type: Boolean,
+    default: false
+  },
+  compact: {
+    type: Boolean,
+    default: false
   }
 })
 
 const emit = defineEmits(['click'])
 
-// 获取牌的显示名称
 const displayRank = computed(() => {
   const rank = props.card.rank
   if (rank >= 2 && rank <= 10) return rank.toString()
@@ -25,7 +32,6 @@ const displayRank = computed(() => {
   return '?'
 })
 
-// 获取花色符号
 const suitSymbol = computed(() => {
   const symbols = {
     hearts: '♥',
@@ -36,17 +42,17 @@ const suitSymbol = computed(() => {
   return symbols[props.card.suit] || '?'
 })
 
-// 获取花色颜色
 const isRed = computed(() => {
   return props.card.suit === 'hearts' || props.card.suit === 'diamonds'
 })
 
-// 卡牌样式类
 const cardClasses = computed(() => {
   return [
     'playing-card',
     { 'selected': props.selected },
-    { 'red': isRed.value }
+    { 'red': isRed.value },
+    { 'compact': props.compact },
+    { 'selectable': props.selectable }
   ]
 })
 </script>
@@ -56,30 +62,27 @@ const cardClasses = computed(() => {
     :class="cardClasses"
     @click="emit('click', card)"
   >
-    <!-- 装饰性边框 -->
     <div class="card-border"></div>
 
-    <!-- 卡牌背景 -->
     <div class="card-bg">
       <div class="card-pattern"></div>
     </div>
 
-    <!-- 左上角 -->
+    <div v-if="selectable && !selected" class="selection-ring"></div>
+    <div v-if="selected" class="selected-badge">已选</div>
+
     <div class="corner top-left">
       <div class="rank">{{ displayRank }}</div>
       <div class="suit">{{ suitSymbol }}</div>
     </div>
 
-    <!-- 中间大符号 -->
     <div class="center-suit">{{ suitSymbol }}</div>
 
-    <!-- 右下角 -->
     <div class="corner bottom-right">
       <div class="rank">{{ displayRank }}</div>
       <div class="suit">{{ suitSymbol }}</div>
     </div>
 
-    <!-- 选中光效 -->
     <div v-if="selected" class="glow-effect"></div>
   </div>
 </template>
@@ -87,53 +90,39 @@ const cardClasses = computed(() => {
 <style scoped>
 .playing-card {
   position: relative;
-  width: 100px;
-  height: 140px;
-  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 50%, #f0f0f0 100%);
+  width: 110px;
+  height: 154px;
+  background: linear-gradient(145deg, #fff8ec 0%, #f0ead8 50%, #e8e0c8 100%);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
   user-select: none;
   overflow: hidden;
   box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.15),
-    0 3px 6px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    0 6px 0 rgba(0, 0, 0, 0.45),
+    0 0 0 2px #2a1c33;
+  color: #2a1c33;
+}
+
+.playing-card.selectable:not(.selected) {
+  filter: saturate(0.96);
 }
 
 .playing-card:hover {
   transform: translateY(-8px) scale(1.05);
   box-shadow:
-    0 12px 24px rgba(0, 0, 0, 0.2),
-    0 6px 12px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    0 12px 0 rgba(0, 0, 0, 0.45),
+    0 0 0 2px #2a1c33,
+    0 16px 28px rgba(0, 0, 0, 0.5);
 }
 
 .playing-card.selected {
-  transform: translateY(-12px) scale(1.08);
+  transform: translateY(-22px);
   box-shadow:
-    0 16px 32px rgba(255, 215, 0, 0.4),
-    0 8px 16px rgba(255, 215, 0, 0.3),
-    0 0 0 3px #ffd700,
-    inset 0 0 15px rgba(255, 215, 0, 0.2);
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    box-shadow:
-      0 16px 32px rgba(255, 215, 0, 0.4),
-      0 8px 16px rgba(255, 215, 0, 0.3),
-      0 0 0 3px #ffd700,
-      inset 0 0 15px rgba(255, 215, 0, 0.2);
-  }
-  50% {
-    box-shadow:
-      0 16px 32px rgba(255, 215, 0, 0.5),
-      0 8px 16px rgba(255, 215, 0, 0.4),
-      0 0 0 4px #ffed4e,
-      inset 0 0 20px rgba(255, 215, 0, 0.3);
-  }
+    0 18px 24px rgba(0, 0, 0, 0.45),
+    0 0 0 2px #2a1c33,
+    0 0 0 4px #ffd166,
+    0 0 24px rgba(255, 209, 102, 0.55);
 }
 
 .card-border {
@@ -162,12 +151,37 @@ const cardClasses = computed(() => {
   opacity: 0.5;
 }
 
+.selection-ring {
+  position: absolute;
+  inset: 7px;
+  border: 2px dashed rgba(56, 197, 255, 0.45);
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.selected-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fde68a, #f59e0b);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #2a1700;
+  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.4);
+  border: 2px solid #2a1700;
+}
+
 .corner {
   position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   font-weight: 800;
   line-height: 1;
   z-index: 2;
@@ -186,24 +200,24 @@ const cardClasses = computed(() => {
 }
 
 .rank {
-  font-size: 24px;
+  font-size: 22px;
   font-family: 'Georgia', 'Times New Roman', serif;
-  color: #1a1a1a;
+  color: #2a1c33;
   font-weight: 900;
 }
 
 .red .rank {
-  color: #dc2626;
+  color: #d6234a;
 }
 
 .suit {
-  font-size: 20px;
-  color: #1a1a1a;
+  font-size: 18px;
+  color: #2a1c33;
   line-height: 1;
 }
 
 .red .suit {
-  color: #dc2626;
+  color: #d6234a;
 }
 
 .center-suit {
@@ -211,93 +225,64 @@ const cardClasses = computed(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 56px;
-  color: #1a1a1a;
+  font-size: 50px;
+  color: #2a1c33;
   opacity: 0.12;
   pointer-events: none;
   z-index: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .red .center-suit {
-  color: #dc2626;
+  color: #d6234a;
 }
 
 .glow-effect {
   position: absolute;
-  inset: -8px;
-  background: radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, transparent 70%);
+  inset: -6px;
+  background: radial-gradient(circle, rgba(255, 209, 102, 0.35) 0%, transparent 70%);
   border-radius: 16px;
   pointer-events: none;
   z-index: -1;
-  animation: glow 2s ease-in-out infinite;
 }
 
-@keyframes glow {
-  0%, 100% {
-    opacity: 0.5;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.03);
-  }
+/* Compact */
+.playing-card.compact {
+  width: 88px;
+  height: 124px;
+  border-radius: 10px;
+}
+.playing-card.compact .rank {
+  font-size: 20px;
+}
+.playing-card.compact .suit {
+  font-size: 16px;
+}
+.playing-card.compact .center-suit {
+  font-size: 42px;
 }
 
-/* 响应式适配 */
-/* 平板端 */
+/* Responsive */
 @media (max-width: 1024px) {
   .playing-card {
     width: 90px;
     height: 126px;
   }
-
-  .rank {
-    font-size: 22px;
-  }
-
-  .suit {
-    font-size: 18px;
-  }
-
-  .center-suit {
-    font-size: 50px;
-  }
+  .rank { font-size: 20px; }
+  .suit { font-size: 16px; }
+  .center-suit { font-size: 44px; }
 }
 
-/* 移动端 */
 @media (max-width: 768px) {
   .playing-card {
     width: 75px;
     height: 105px;
     border-radius: 10px;
   }
-
-  .top-left {
-    top: 6px;
-    left: 6px;
-  }
-
-  .bottom-right {
-    bottom: 6px;
-    right: 6px;
-  }
-
-  .rank {
-    font-size: 18px;
-  }
-
-  .suit {
-    font-size: 16px;
-  }
-
-  .center-suit {
-    font-size: 42px;
-  }
-
-  .card-border {
-    inset: 2px;
-    border-radius: 8px;
-  }
+  .top-left { top: 6px; left: 6px; }
+  .bottom-right { bottom: 6px; right: 6px; }
+  .rank { font-size: 18px; }
+  .suit { font-size: 14px; }
+  .center-suit { font-size: 36px; }
+  .card-border { inset: 2px; border-radius: 8px; }
 }
 </style>
