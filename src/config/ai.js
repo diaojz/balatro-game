@@ -23,14 +23,26 @@ export const AI_PROVIDERS = {
       { id: 'gpt-4o-mini', label: 'GPT-4o mini（快、便宜，推荐）' },
       { id: 'gpt-4o',      label: 'GPT-4o（更强）' }
     ]
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    endpoint: 'https://api.deepseek.com/v1/chat/completions',
+    defaultModel: 'deepseek-v4-flash',
+    models: [
+      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash（快、便宜，推荐）' },
+      { id: 'deepseek-v4-pro',   label: 'DeepSeek-V4-Pro（更强）' }
+    ],
+    extraHeaders: {
+      'x-api-key': null
+    }
   }
 }
 
 export const DEFAULT_AI_SETTINGS = {
   enabled: false,
-  provider: 'anthropic',
+  provider: 'deepseek',
   apiKey: '',
-  model: 'claude-haiku-4-5-20251001',
+  model: 'deepseek-v4-flash',
   maxTokens: 400,
   temperature: 0.3
 }

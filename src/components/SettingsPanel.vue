@@ -46,6 +46,9 @@ function getModelsForProvider(providerKey) {
     ]}, openai: { models: [
       { id: 'gpt-4o-mini', label: 'GPT-4o mini（快、便宜，推荐）' },
       { id: 'gpt-4o',      label: 'GPT-4o（更强）' }
+    ]}, deepseek: { models: [
+      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash（快、便宜，推荐）' },
+      { id: 'deepseek-v4-pro',   label: 'DeepSeek-V4-Pro（更强）' }
     ]}}
     return cfg[providerKey]?.models || []
   } catch (_) { return [] }
@@ -160,6 +163,7 @@ async function testConnection() {
             <select v-model="aiSettings.provider" class="settings-select" data-no-sfx="true">
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="openai">OpenAI (GPT)</option>
+              <option value="deepseek">DeepSeek</option>
             </select>
           </div>
 

@@ -80,6 +80,25 @@ export function serializeGameState({ hand, ownedJokers, blind, handsLeft, discar
   }
 }
 
+function buildDeepSeekPayload(state) {
+  return {
+    body: {
+      model: settings.model,
+      max_tokens: settings.maxTokens,
+      temperature: settings.temperature,
+      messages: [
+        { role: 'system', content: COACH_SYSTEM_PROMPT },
+        { role: 'user',   content: `当前游戏状态：\n${JSON.stringify(state, null, 2)}\n\n请输出 JSON。` }
+      ]
+    },
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': settings.apiKey
+    },
+    parseResponse: (json) => json?.choices?.[0]?.message?.content ?? ''
+  }
+}
+
 function buildAnthropicPayload(state) {
   return {
     body: {
@@ -171,7 +190,9 @@ export async function requestCoachAdvice(gameState) {
   const state = serializeGameState(gameState)
   const built = settings.provider === 'anthropic'
     ? buildAnthropicPayload(state)
-    : buildOpenAIPayload(state)
+    : settings.provider === 'deepseek'
+      ? buildDeepSeekPayload(state)
+      : buildOpenAIPayload(state)
 
   const ctrl = new AbortController()
   const timeout = setTimeout(() => ctrl.abort(), COACH_REQUEST_TIMEOUT_MS)
@@ -220,7 +241,9 @@ export async function pingProvider() {
   }
   const built = settings.provider === 'anthropic'
     ? buildAnthropicPayload(minimalState)
-    : buildOpenAIPayload(minimalState)
+    : settings.provider === 'deepseek'
+      ? buildDeepSeekPayload(minimalState)
+      : buildOpenAIPayload(minimalState)
 
   const ctrl = new AbortController()
   const timeout = setTimeout(() => ctrl.abort(), COACH_REQUEST_TIMEOUT_MS)
