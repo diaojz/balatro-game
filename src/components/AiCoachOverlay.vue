@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import * as ai from '../utils/ai-coach.js'
 import * as audio from '../utils/audio.js'
@@ -15,13 +15,26 @@ const particleRef = ref(null)
 const status = ref('idle')   // idle | thinking | done | error
 const advice = ref(null)
 const bubbleVisible = ref(false)
+const enabled = ref(false)
 let bubbleTimer = null
 let particleTl = null
 
-const enabled = computed(() => {
+// 每 2 秒轮询 AI 设置，确保设置面板启用后水晶球自动响应
+function refreshEnabled() {
   const s = ai.getSettings()
-  return s.enabled && !!s.apiKey
-})
+  enabled.value = s.enabled && !!s.apiKey
+}
+refreshEnabled()
+let pollTimer = null
+watch(() => props.visible, (v) => {
+  if (v) {
+    refreshEnabled()
+    pollTimer = setInterval(refreshEnabled, 2000)
+  } else {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}, { immediate: true })
 
 function startThinking() {
   status.value = 'thinking'
@@ -43,6 +56,8 @@ function stopThinking() {
 }
 
 async function ask() {
+  // 每次点击前重新读取 AI 设置，解决设置面板改动后水晶球不刷新的问题
+  refreshEnabled()
   if (!enabled.value) {
     emit('toast', { type: 'warn', text: '请先在设置中启用 AI 教练并填入 API Key' })
     return
@@ -101,6 +116,7 @@ function errorTextOf(e) {
 onUnmounted(() => {
   stopThinking()
   clearTimeout(bubbleTimer)
+  clearInterval(pollTimer)
 })
 </script>
 
