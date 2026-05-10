@@ -30,3 +30,7 @@ dist-ssr
 # Tauri build artifacts
 src-tauri/target/
 src-tauri/gen/
+
+# Backup / temp
+*.backup
+*.bak
