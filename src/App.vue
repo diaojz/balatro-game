@@ -19,6 +19,8 @@ import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
 import ScoreCounter from './components/ScoreCounter.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import OrientationGuard from './components/OrientationGuard.vue'
+import JokerDetailPopover from './components/JokerDetailPopover.vue'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -50,6 +52,15 @@ const DIFFICULTY_OPTIONS = [
 const settingsOpen = ref(false)
 function openSettings() { settingsOpen.value = true }
 function closeSettings() { settingsOpen.value = false }
+
+// 长按 Joker 弹出详情浮窗（移动端取代桌面 hover tooltip 的详细描述）
+const detailJoker = ref(null)
+const detailContext = ref('owned')
+function showJokerDetail(joker, context = 'owned') {
+  detailJoker.value = joker
+  detailContext.value = context
+}
+function closeJokerDetail() { detailJoker.value = null }
 
 const deck = ref([])
 const discardPile = ref([])
@@ -1362,6 +1373,8 @@ onBeforeUnmount(() => {
                     size="shop"
                     :show-tooltip="false"
                     :shimmering="shimmeringJokerIds.includes(joker.id)"
+                    context="shop"
+                    @longpress="showJokerDetail"
                   />
                 </div>
                 <div class="shop-item-bottom">
@@ -1387,7 +1400,9 @@ onBeforeUnmount(() => {
                 :key="joker.id"
                 :joker="joker"
                 size="normal"
+                context="owned"
                 @click="requestSellJoker(joker)"
+                @longpress="showJokerDetail"
               />
               <JokerCard
                 v-for="slot in maxJokers - ownedJokers.length"
@@ -1518,7 +1533,9 @@ onBeforeUnmount(() => {
               :key="joker.id"
               :joker="joker"
               size="normal"
+              context="owned"
               :triggering="triggeredJokerIds.includes(joker.id)"
+              @longpress="showJokerDetail"
             />
             <JokerCard
               v-for="slot in maxJokers - ownedJokers.length"
@@ -1644,6 +1661,17 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Transition>
+
+    <!-- 移动端：长按 Joker 详情浮窗 -->
+    <JokerDetailPopover
+      :open="detailJoker !== null"
+      :joker="detailJoker"
+      :context="detailContext"
+      @close="closeJokerDetail"
+    />
+
+    <!-- 移动端：横屏遮罩（z-index 最高，最后挂载） -->
+    <OrientationGuard />
   </div>
 </template>
 

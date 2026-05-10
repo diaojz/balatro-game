@@ -1,0 +1,91 @@
+/* v2.0.0 响应式断点 + safe-area 变量
+   主线：Tauri 2.x WebView 在 iOS/Android/桌面 webview 上 env(safe-area-inset-*)
+   都生效，规则桌面 + 移动端通用
+   规则放最后 import，保证媒体查询能覆盖 game-styles.css 的桌面默认布局 */
+
+:root {
+  --breakpoint-tablet: 768px;
+  --breakpoint-desktop: 1024px;
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+}
+
+/* ========== Safe-area 全局：最外层 shell 自己消化顶/左/右安全区 ========== */
+.balatro-shell {
+  padding-top:   var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-left:  var(--safe-left);
+  /* 底部 padding 由 sticky 元素自己处理，避免双倍间距 */
+}
+
+/* ========== Phone（< 768px）：手机竖屏 ========== */
+@media (max-width: 767px) {
+  /* HUD 顶部信息栏：4 列网格压成 2 列；元数据 6 项压成 3×2 */
+  .hud {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .hud-meta {
+    grid-template-columns: repeat(3, 1fr);
+    font-size: 12px;
+  }
+  .hud-score-val {
+    font-size: 80%;
+  }
+
+  /* Joker 槽：5 槽改横滑容器，单卡保原尺寸 */
+  .joker-bar-row {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+    flex-wrap: nowrap;
+  }
+  .joker-bar-row > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+
+  /* 出牌区：高度收紧给手牌让位 */
+  .play-table {
+    min-height: min(28vh, 240px);
+  }
+
+  /* 手牌扇形：整体缩到 72%，重心定在底部 */
+  .hand-fan {
+    transform: scale(0.72);
+    transform-origin: bottom center;
+  }
+
+  /* 底部按钮栏：sticky 到屏幕底部 + 安全区避让 + 渐隐遮罩 */
+  .bottom-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    padding-bottom: max(var(--safe-bottom), 12px);
+    background: linear-gradient(to top, var(--bg-deep, #0a0816) 70%, transparent);
+  }
+
+  /* 设置齿轮：尺寸压到 36×36，避让顶部安全区 */
+  .hud-icon-btn.settings-trigger {
+    width: 36px;
+    height: 36px;
+    top:   max(var(--safe-top),   12px);
+    right: max(var(--safe-right), 12px);
+  }
+
+  /* Toast：上移避让底部安全区 */
+  .toast-bar {
+    bottom: max(var(--safe-bottom), 16px);
+  }
+}
+
+/* ========== Tablet（768–1023px）：iPad 等中尺寸 ========== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hand-fan {
+    --fan-radius: 600px;
+  }
+}
+
+/* ========== Desktop（≥ 1024px）：维持第 7 轮所有布局，一行不改 ========== */

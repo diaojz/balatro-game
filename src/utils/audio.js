@@ -128,3 +128,7 @@ export function updateSettings(patch) {
   if ('muted' in patch) Howler.mute(settings.muted)
   applyAllVolumes()
 }
+
+export function getCurrentBgmTrack() {
+  return currentBgm?.track ?? null
+}

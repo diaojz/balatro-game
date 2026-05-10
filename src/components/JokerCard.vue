@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { getRarityColor, getRarityLabel } from '../config/jokers.js'
+import { useLongPress } from '../utils/touch.js'
 
 const props = defineProps({
   joker: {
@@ -26,10 +27,25 @@ const props = defineProps({
   shimmering: {
     type: Boolean,
     default: false
+  },
+  context: {
+    type: String,
+    default: 'owned' // 'shop' | 'owned'
   }
 })
 
-defineEmits(['click'])
+const emit = defineEmits(['click', 'longpress'])
+
+const { handlers, shouldSuppressClick } = useLongPress({
+  onLongPress: () => {
+    if (props.joker) emit('longpress', props.joker, props.context)
+  }
+})
+
+function handleClick() {
+  if (shouldSuppressClick()) return
+  if (props.joker) emit('click', props.joker)
+}
 
 const rarityColor = computed(() => props.joker ? getRarityColor(props.joker.rarity) : '#43295e')
 const rarityLabel = computed(() => props.joker ? getRarityLabel(props.joker.rarity) : '')
@@ -51,7 +67,8 @@ const artType = computed(() => props.joker?.art || 'jimbo')
     class="joker-card"
     :class="[`size-${size}`, `rarity-${joker.rarity}`, { triggering, shimmering }]"
     :style="{ '--rarity': rarityColor }"
-    @click="$emit('click', joker)"
+    v-bind="handlers"
+    @click="handleClick"
   >
     <!-- 卡片背景层（多层渐变 + 内描边） -->
     <div class="card-frame">
