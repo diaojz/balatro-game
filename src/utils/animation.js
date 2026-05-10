@@ -27,34 +27,95 @@ export function flyToTable(cardEl, targetEl, options = {}) {
 }
 
 /**
- * 在屏幕中心爆出一组随机方向飘散的 emoji 粒子。
- * Boss 击败时调用。1.8s 后自动清理 DOM。
+ * Boss 击败粒子升级版：屏幕白闪 + 爆炸圆环 + 三层粒子（金币/星星/闪光）。
+ *
+ * 三层节奏（参考小丑牌原作 boss 击败感）：
+ * - 内圈 金币 emoji：t=0    短近爆发，0.6s
+ * - 中圈 星星 emoji：t=80   中距离，1.0s
+ * - 外圈 闪光 emoji：t=180  远距离慢消散，1.5s
+ *
+ * 签名向后兼容：count 作为整体强度因子（ratio = count / 36）。
+ * 默认 count=30 时三层约 10/13/17，调用方传 36 时恰好 12/16/20。
+ * 1.8s 后整体 DOM 清理。
  */
 export function burstParticles(count = 30) {
+  // 屏幕白闪
+  const flash = document.createElement('div')
+  flash.className = 'boss-flash'
+  document.body.appendChild(flash)
+  setTimeout(() => flash.remove(), 450)
+
+  // 爆炸圆环
+  const ring = document.createElement('div')
+  ring.className = 'boss-ring'
+  document.body.appendChild(ring)
+  setTimeout(() => ring.remove(), 450)
+
+  // 三层粒子容器
   const container = document.createElement('div')
   container.className = 'particle-burst'
   document.body.appendChild(container)
 
-  const symbols = ['💰', '⭐', '✨']
-  for (let i = 0; i < count; i++) {
-    const p = document.createElement('div')
-    p.className = 'particle'
-    p.textContent = symbols[i % symbols.length]
-    container.appendChild(p)
+  const ratio = Math.max(0.4, count / 36)
+  const tiers = [
+    {
+      cls: 'tier-inner',
+      symbols: ['💰', '🪙'],
+      n: Math.round(12 * ratio),
+      delay: 0,
+      duration: 0.6,
+      minDist: 110,
+      maxDist: 200
+    },
+    {
+      cls: 'tier-mid',
+      symbols: ['⭐', '🌟'],
+      n: Math.round(16 * ratio),
+      delay: 0.08,
+      duration: 1.0,
+      minDist: 220,
+      maxDist: 360
+    },
+    {
+      cls: 'tier-outer',
+      symbols: ['✨', '💫'],
+      n: Math.round(20 * ratio),
+      delay: 0.18,
+      duration: 1.5,
+      minDist: 360,
+      maxDist: 540
+    }
+  ]
 
-    gsap.fromTo(
-      p,
-      { x: 0, y: 0, scale: 0.5, opacity: 1 },
-      {
-        x: (Math.random() - 0.5) * 800,
-        y: -Math.random() * 600 - 100,
-        scale: 1.5,
-        opacity: 0,
-        duration: 1.5,
-        ease: 'power2.out'
-      }
-    )
-  }
+  tiers.forEach(tier => {
+    for (let i = 0; i < tier.n; i++) {
+      const p = document.createElement('div')
+      p.className = `particle ${tier.cls}`
+      p.textContent = tier.symbols[i % tier.symbols.length]
+      container.appendChild(p)
+
+      // 全周角随机方向 + 上方偏置
+      const angle = Math.random() * Math.PI * 2
+      const distance = tier.minDist + Math.random() * (tier.maxDist - tier.minDist)
+      const dx = Math.cos(angle) * distance
+      const dy = Math.sin(angle) * distance - Math.random() * 120
+
+      gsap.fromTo(
+        p,
+        { x: 0, y: 0, scale: 0.4, opacity: 1, rotation: 0 },
+        {
+          x: dx,
+          y: dy,
+          scale: 1.4,
+          opacity: 0,
+          rotation: (Math.random() - 0.5) * 540,
+          duration: tier.duration,
+          delay: tier.delay,
+          ease: 'power2.out'
+        }
+      )
+    }
+  })
 
   setTimeout(() => container.remove(), 1800)
 }

@@ -1,5 +1,5 @@
-/* v1.5.1 共享动效：fade+slide+scale 转场、Joker 炸裂触发、稀有度光效、
-   牌型大字 banner、得分飘字、桌面 impact、screen-shake、粒子、降级 */
+/* v1.5.6 共享动效：fade+slide+scale 转场、Joker 炸裂触发、稀有度光效精修、
+   牌型大字 banner、得分飘字、桌面 impact、screen-shake、boss 粒子升级、降级 */
 
 /* ========== (a) 过场转场升级（fade + slide + scale） ========== */
 .fade-enter-active, .fade-leave-active {
@@ -39,29 +39,86 @@
   100% { transform: scale(1.8); opacity: 0; }
 }
 
-/* ========== (c) 稀有度抽卡光效 ========== */
+/* ========== (c) 稀有度抽卡光效（v1.5.6 精修：rare / legendary 独立语言） ========== */
 .joker-card.rarity-rare,
 .joker-card.rarity-legendary {
   position: relative;
 }
+/* 共用横扫底座：::before 是主扫光层，所有 rare/legendary 都用 */
 .joker-card.rarity-rare::before,
 .joker-card.rarity-legendary::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.85) 50%, transparent 70%);
-  transform: translateX(-100%);
   pointer-events: none;
   z-index: 10;
   border-radius: inherit;
+  transform: translateX(-100%);
 }
-.joker-card.rarity-rare.shimmering::before,
+
+/* rare：单道粉白光，1.0s */
+.joker-card.rarity-rare::before {
+  background: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgba(255, 200, 220, 0.55) 45%,
+    rgba(255, 255, 255, 0.92) 50%,
+    rgba(255, 200, 220, 0.55) 55%,
+    transparent 72%
+  );
+}
+.joker-card.rarity-rare.shimmering::before {
+  animation: rarity-shimmer-rare 1.0s ease-out;
+}
+
+/* legendary 主扫光 ::before：金光，0~70% 完成 */
+.joker-card.rarity-legendary::before {
+  background: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgba(255, 220, 130, 0.6) 45%,
+    rgba(255, 245, 200, 0.95) 50%,
+    rgba(255, 220, 130, 0.6) 55%,
+    transparent 72%
+  );
+}
 .joker-card.rarity-legendary.shimmering::before {
-  animation: rarity-shimmer 0.9s ease-out;
+  animation: rarity-shimmer-legendary-front 1.5s ease-out;
 }
-@keyframes rarity-shimmer {
+
+/* legendary 副扫光 ::after：紫光，30~100% 完成（与主扫光相位错开 0.3s） */
+.joker-card.rarity-legendary.shimmering::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 11;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 28%,
+    rgba(190, 140, 255, 0.55) 45%,
+    rgba(220, 200, 255, 0.85) 50%,
+    rgba(190, 140, 255, 0.55) 55%,
+    transparent 72%
+  );
+  transform: translateX(-100%);
+  animation: rarity-shimmer-legendary-back 1.5s ease-out 0.3s;
+}
+
+@keyframes rarity-shimmer-rare {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+@keyframes rarity-shimmer-legendary-front {
+  0%   { transform: translateX(-100%); }
+  70%  { transform: translateX(60%); opacity: 0.9; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+@keyframes rarity-shimmer-legendary-back {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
 }
 
 /* ========== (d) 牌型大字 banner（炸裂金光版） ========== */
@@ -171,7 +228,7 @@
   100% { transform: translate(0, 0); }
 }
 
-/* ========== (h) 粒子样式 ========== */
+/* ========== (h) 粒子样式（v1.5.6：boss 击败三层粒子 + 圆环 + 屏闪） ========== */
 .particle-burst {
   position: fixed;
   top: 50%;
@@ -181,10 +238,13 @@
 }
 .particle {
   position: absolute;
-  font-size: 28px;
   will-change: transform, opacity;
   filter: drop-shadow(0 0 8px rgba(255,209,102,0.8));
 }
+.particle.tier-inner  { font-size: 30px; }
+.particle.tier-mid    { font-size: 26px; }
+.particle.tier-outer  { font-size: 22px; }
+
 .joker-particle {
   position: fixed;
   pointer-events: none;
@@ -192,6 +252,45 @@
   font-size: 22px;
   will-change: transform, opacity;
   filter: drop-shadow(0 0 6px rgba(255,209,102,0.9));
+}
+
+/* 爆炸圆环：屏幕中心，0→260px 半径，0.4s 扩散 */
+.boss-ring {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 230, 150, 0.95);
+  box-shadow:
+    0 0 24px 6px rgba(255, 209, 102, 0.85),
+    inset 0 0 18px rgba(255, 245, 220, 0.6);
+  pointer-events: none;
+  z-index: 199;
+  transform: translate(-50%, -50%) scale(1);
+  animation: boss-ring-expand 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes boss-ring-expand {
+  0%   { transform: translate(-50%, -50%) scale(1);  opacity: 1; border-width: 4px; }
+  60%  { transform: translate(-50%, -50%) scale(48); opacity: 0.6; border-width: 2px; }
+  100% { transform: translate(-50%, -50%) scale(64); opacity: 0; border-width: 1px; }
+}
+
+/* 屏幕闪光：满屏白光 0.15s 过曝 */
+.boss-flash {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.85) 0%, rgba(255,240,180,0.35) 40%, transparent 80%);
+  pointer-events: none;
+  z-index: 198;
+  opacity: 0;
+  animation: boss-flash-pulse 0.4s ease-out forwards;
+}
+@keyframes boss-flash-pulse {
+  0%   { opacity: 0; }
+  20%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ========== (j) HUD 接收脉冲（飘字飞达时触发） ========== */

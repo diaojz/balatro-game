@@ -1046,11 +1046,29 @@ const artType = computed(() => props.joker?.art || 'jimbo')
     inset 0 0 0 4px #f7e9c4,
     0 0 16px rgba(181,119,255,.7),
     0 4px 0 rgba(0,0,0,.55);
-  animation: legendary-shimmer 2.4s linear infinite;
+  animation:
+    legendary-pulse-aura 1.2s ease-in-out infinite,
+    legendary-hue 2.4s linear infinite;
 }
-@keyframes legendary-shimmer {
-  0%, 100% { filter: hue-rotate(0deg); }
-  50% { filter: hue-rotate(20deg); }
+@keyframes legendary-pulse-aura {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 0 2px #b577ff,
+      inset 0 0 0 4px #f7e9c4,
+      0 0 12px rgba(181,119,255,.5),
+      0 4px 0 rgba(0,0,0,.55);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px #d3a8ff,
+      inset 0 0 0 4px #fff5d0,
+      0 0 28px 4px rgba(181,119,255,1),
+      0 4px 0 rgba(0,0,0,.55);
+  }
+}
+@keyframes legendary-hue {
+  0%, 100% { filter: hue-rotate(-60deg); }
+  50%      { filter: hue-rotate(60deg); }
 }
 
 /* ========== 空槽 ========== */
