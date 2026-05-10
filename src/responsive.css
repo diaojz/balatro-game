@@ -1,4 +1,4 @@
-/* v2.0.0 响应式断点 + safe-area 变量
+/* v2.0.1 响应式断点 + safe-area 变量
    主线：Tauri 2.x WebView 在 iOS/Android/桌面 webview 上 env(safe-area-inset-*)
    都生效，规则桌面 + 移动端通用
    规则放最后 import，保证媒体查询能覆盖 game-styles.css 的桌面默认布局 */
@@ -22,7 +22,7 @@
 
 /* ========== Phone（< 768px）：手机竖屏 ========== */
 @media (max-width: 767px) {
-  /* HUD 顶部信息栏：4 列网格压成 2 列；元数据 6 项压成 3×2 */
+  /* --- HUD 顶部信息栏：4 列网格压成 2 列；元数据 6 项压成 3×2 --- */
   .hud {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
@@ -34,31 +34,39 @@
   .hud-score-val {
     font-size: 80%;
   }
+  .hud-progress-text {
+    font-size: 11px;
+  }
 
-  /* Joker 槽：5 槽改横滑容器，单卡保原尺寸 */
+  /* --- Joker 区：5 槽改横滑容器（覆盖原 game-styles 的 display:none） --- */
+  .joker-bar {
+    display: flex !important;
+  }
   .joker-bar-row {
-    overflow-x: auto;
+    overflow-x: auto !important;
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     padding-bottom: 6px;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap !important;
   }
   .joker-bar-row > * {
     scroll-snap-align: start;
     flex-shrink: 0;
   }
 
-  /* 出牌区：高度收紧给手牌让位 */
+  /* --- 出牌区：高度收紧给手牌让位 --- */
   .play-table {
     min-height: min(28vh, 240px);
   }
 
-  /* 手牌扇形：整体缩到 72%，重心定在底部 */
+  /* --- 手牌扇形：缩到 55%（visual 388px ≈ 视口 390）让 8 张牌完整可见
+         transform 不影响 layout，移除 overflow 让子卡 visual 自然展示 --- */
   .hand-fan {
-    transform: scale(0.72);
+    transform: scale(0.55);
     transform-origin: bottom center;
   }
 
-  /* 底部按钮栏：sticky 到屏幕底部 + 安全区避让 + 渐隐遮罩 */
+  /* --- 底部按钮栏：sticky 到屏幕底部 + 安全区避让 + 渐隐遮罩 --- */
   .bottom-bar {
     position: sticky;
     bottom: 0;
@@ -67,7 +75,7 @@
     background: linear-gradient(to top, var(--bg-deep, #0a0816) 70%, transparent);
   }
 
-  /* 设置齿轮：尺寸压到 36×36，避让顶部安全区 */
+  /* --- 设置齿轮：尺寸压到 36×36，避让顶部安全区 --- */
   .hud-icon-btn.settings-trigger {
     width: 36px;
     height: 36px;
@@ -75,9 +83,65 @@
     right: max(var(--safe-right), 12px);
   }
 
-  /* Toast：上移避让底部安全区 */
+  /* --- 各 phase 顶部加 padding-right 避让 fixed 齿轮 --- */
+  .phase-panel {
+    padding-right: 56px;
+  }
+
+  /* --- 盲注选择：右上金钱+进度块隐藏（齿轮按钮位重合） + 卡片改纵排不 wrap --- */
+  .blind-select-right {
+    display: none !important;
+  }
+  .blind-select-cards {
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    overflow-x: visible !important;
+  }
+
+  /* --- Toast：phone 下宽度收紧（max-width: 视口减 32px），避免被 top+bottom 拉伸 --- */
   .toast-bar {
-    bottom: max(var(--safe-bottom), 16px);
+    top: max(var(--safe-top), 12px) !important;
+    right: max(var(--safe-right), 60px) !important;  /* 给齿轮按钮 36+padding 让位 */
+    left: auto !important;
+    bottom: auto !important;
+    max-width: calc(100vw - 84px);
+    width: max-content;
+    font-size: 13px;
+    padding: 10px 14px;
+  }
+
+  /* --- 商店购买区：grid 改横滑容器，单卡占视口主要宽度 --- */
+  .shop-for-sale {
+    overflow-x: hidden;
+    overflow-y: visible;
+  }
+  .shop-items {
+    display: flex !important;
+    grid-template-columns: none !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    gap: 12px;
+    padding-bottom: 8px;
+  }
+  .shop-item-card {
+    flex: 0 0 calc(100vw - 96px) !important;
+    scroll-snap-align: center;
+  }
+
+  /* --- 商店已拥有区：5 槽改横滑（与 joker-bar 一致） --- */
+  .shop-owned-row {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+  }
+  .shop-owned-row > * {
+    scroll-snap-align: start;
+    flex-shrink: 0;
   }
 }
 

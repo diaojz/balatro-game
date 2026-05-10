@@ -2861,10 +2861,7 @@ onBeforeUnmount(() => {
   .hud-progress {
     grid-column: 1 / -1;
   }
-  .joker-bar {
-    display: none;
-  }
-  .bl ind-select-cards {
+  .blind-select-cards {
     flex-wrap: wrap;
   }
   .shop-items {
