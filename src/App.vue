@@ -21,6 +21,7 @@ import ScoreCounter from './components/ScoreCounter.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
+import AiCoachOverlay from './components/AiCoachOverlay.vue'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -61,6 +62,14 @@ function showJokerDetail(joker, context = 'owned') {
   detailContext.value = context
 }
 function closeJokerDetail() { detailJoker.value = null }
+
+// AI 教练推荐高亮
+const aiRecommendedCardIds = ref([])
+function onAiRecommend(ids) { aiRecommendedCardIds.value = ids }
+function onAiClear()        { aiRecommendedCardIds.value = [] }
+function onAiToast(payload) {
+  showToastMessage(payload.text, payload.type === 'warn' ? 'warning' : 'info')
+}
 
 const deck = ref([])
 const discardPile = ref([])
@@ -550,6 +559,7 @@ function refillHand() {
     scheduleReorderAfterDeal(needed)
     audio.playSfx('cardDeal')
   }
+  onAiClear()
 }
 
 function toggleCard(card) {
@@ -564,6 +574,7 @@ function toggleCard(card) {
 
 async function playHand() {
   if (isResolvingHand.value) return
+  onAiClear()
   const selected = selectedCards.value
 
   if (selected.length === 0) {
@@ -874,6 +885,7 @@ async function playHand() {
 
 function discardCards() {
   if (isResolvingHand.value) return
+  onAiClear()
   const selected = selectedCards.value
 
   if (selected.length === 0) {
@@ -1097,6 +1109,8 @@ watch(runPhase, (next) => {
     audio.playBgm(gameWon.value ? 'win' : 'lose')
     return
   }
+  // 离开战斗阶段时清空 AI 推荐
+  if (next !== RUN_PHASES.BATTLE) onAiClear()
   const track = PHASE_TO_BGM[next]
   audio.playBgm(track)
 }, { immediate: false })
@@ -1524,6 +1538,26 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- AI 教练 + 设置（战斗阶段 HUD 顶部右侧） -->
+        <div class="hud-top-right">
+          <AiCoachOverlay
+            :visible="isBattlePhase"
+            :game-state="{
+              hand,
+              ownedJokers,
+              blind,
+              handsLeft,
+              discardsLeft,
+              money,
+              lastPlayedHand,
+              totalScore
+            }"
+            @recommend="onAiRecommend"
+            @clear="onAiClear"
+            @toast="onAiToast"
+          />
+        </div>
+
         <!-- Joker 区 -->
         <div class="joker-bar">
           <div class="joker-bar-label">JOKERS · {{ ownedJokers.length }}/{{ maxJokers }}</div>
@@ -1593,6 +1627,7 @@ onBeforeUnmount(() => {
               :selectable="true"
               :deal-index="index"
               compact
+              :recommended="aiRecommendedCardIds.includes(card.id)"
               @click="toggleCard(card)"
               :style="{
                 marginLeft: index === 0 ? '0' : '-8px',
@@ -2925,5 +2960,14 @@ onBeforeUnmount(() => {
 .hud-icon-btn.settings-trigger:hover {
   transform: rotate(45deg);
   background: rgba(40, 26, 70, 0.9);
+}
+
+/* AI 教练：战斗 HUD 顶部右侧容器 */
+.hud-top-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 0 6px;
 }
 </style>

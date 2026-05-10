@@ -98,7 +98,8 @@ export function createDeck() {
     }
   }
 
-  return shuffleDeck(deck)
+  // 追加可读稳定 id（供 AI 教练引用牌型）：c{idx}-{suit首字母}{rank}
+  return shuffleDeck(deck.map((card, idx) => ({ ...card, id: `c${idx}-${card.suit[0]}${card.rank}` })))
 }
 
 // 洗牌

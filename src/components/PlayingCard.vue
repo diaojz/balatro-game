@@ -26,6 +26,10 @@ const props = defineProps({
   disableEnter: {
     type: Boolean,
     default: false
+  },
+  recommended: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -59,6 +63,7 @@ const cardClasses = computed(() => {
   return [
     'playing-card',
     { 'selected': props.selected },
+    { 'recommended': props.recommended },
     { 'red': isRed.value },
     { 'compact': props.compact },
     { 'selectable': props.selectable }
@@ -295,5 +300,17 @@ defineExpose({ cardRef })
   .suit { font-size: 14px; }
   .center-suit { font-size: 36px; }
   .card-border { inset: 2px; border-radius: 8px; }
+}
+
+/* AI 推荐高亮：金色描边 + 缓慢光晕呼吸 */
+.playing-card.is-recommended {
+  outline: 3px solid var(--gold, #ffd166);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px 4px rgba(255, 209, 102, .55);
+  animation: card-recommend-pulse 1.6s ease-in-out infinite;
+}
+@keyframes card-recommend-pulse {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(255, 209, 102, .4); }
+  50%      { box-shadow: 0 0 22px 6px rgba(255, 209, 102, .85); }
 }
 </style>
