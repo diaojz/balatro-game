@@ -1,9 +1,11 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore, buildScoreSequence } from './utils/scoring.js'
 import { BLINDS, TOTAL_ANTES } from './config/blinds.js'
 import { getRandomJoker } from './config/jokers.js'
+import { PHASE_TO_BGM } from './config/audio.js'
+import * as audio from './utils/audio.js'
 import gsap from 'gsap'
 import {
   burstParticles,
@@ -16,6 +18,7 @@ import {
 import PlayingCard from './components/PlayingCard.vue'
 import JokerCard from './components/JokerCard.vue'
 import ScoreCounter from './components/ScoreCounter.vue'
+import SettingsPanel from './components/SettingsPanel.vue'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -43,6 +46,10 @@ const DIFFICULTY_OPTIONS = [
     startingMoney: 4
   }
 ]
+
+const settingsOpen = ref(false)
+function openSettings() { settingsOpen.value = true }
+function closeSettings() { settingsOpen.value = false }
 
 const deck = ref([])
 const discardPile = ref([])
@@ -429,6 +436,7 @@ function dealCards() {
   applyAntePillarDebuff(newCards)
   hand.value = newCards
   scheduleReorderAfterDeal(size)
+  audio.playSfx('cardDeal')
 }
 
 const currentSortMode = ref('rank') // 'rank' | 'suit'
@@ -529,6 +537,7 @@ function refillHand() {
     applyAntePillarDebuff(newCards)
     hand.value.push(...newCards)
     scheduleReorderAfterDeal(needed)
+    audio.playSfx('cardDeal')
   }
 }
 
@@ -539,6 +548,7 @@ function toggleCard(card) {
     return
   }
   card.selected = !card.selected
+  if (card.selected) audio.playSfx('cardSelect')
 }
 
 async function playHand() {
@@ -562,6 +572,7 @@ async function playHand() {
   lastScore.value = 0
   triggeredJokerIds.value = []
   showPlayedCards.value = true
+  audio.playSfx('cardPlay')
 
   // 1) 给每张已选牌 cloneNode 副本，挂到 body 上 fixed 定位
   //    原牌 visibility:hidden 保留占位（避免 hand-fan 立即 reflow）
@@ -688,6 +699,7 @@ async function playHand() {
     } else if (ev.type === 'joker') {
       const jokerId = ev.joker.id
       triggeredJokerIds.value = [...triggeredJokerIds.value, jokerId]
+      audio.playSfx('jokerTrigger')
       const jokerEls = document.querySelectorAll('.joker-bar .joker-bar-row .joker-card:not(.empty)')
       const jokerEl = jokerEls[ev.jokerIndex]
       if (jokerEl) {
@@ -863,6 +875,7 @@ function discardCards() {
     return
   }
 
+  audio.playSfx('cardDiscard')
   discardPile.value.push(...selected.map(card => ({ ...card, selected: false })))
   hand.value = hand.value.filter(card => !card.selected)
   refillHand()
@@ -876,11 +889,14 @@ function passBlind() {
   showToastMessage(`通过 ${blind.value.name}！获得 $${blind.value.reward}`, 'success')
 
   if (blind.value.type === 'boss') {
+    audio.playSfx('bossDefeat')
     burstParticles(36)
     // 进入下一 ante，重置 ante 历史
     antePlayedCardKeys.value = new Set()
     anteHandTypeCounts.value = {}
     mostPlayedHandTypeKey.value = null
+  } else {
+    audio.playSfx('blindPass')
   }
 
   if (currentBlind.value < BLINDS.length - 1) {
@@ -944,6 +960,7 @@ function rerollShop() {
   }
 
   money.value -= 1
+  audio.playSfx('shopReroll')
   openShop()
   showToastMessage('商店已刷新', 'info')
 }
@@ -978,6 +995,7 @@ function buyJoker(joker) {
   money.value -= joker.price
   ownedJokers.value.push({ ...joker })
   shopJokers.value = shopJokers.value.filter(item => item.id !== joker.id)
+  audio.playSfx('shopBuy')
   showToastMessage(`购买了 ${joker.name}`, 'success')
 }
 
@@ -985,6 +1003,7 @@ function sellJoker(joker) {
   const sellPrice = Math.floor(joker.price / 2)
   money.value += sellPrice
   ownedJokers.value = ownedJokers.value.filter(item => item !== joker)
+  audio.playSfx('shopSell')
   showToastMessage(`出售了 ${joker.name}，获得 $${sellPrice}`, 'info')
 }
 
@@ -1038,13 +1057,66 @@ function restart() {
   initGame()
 }
 
+function unlockOnFirstInteraction() {
+  audio.unlock()
+  audio.preloadSfx()
+  if (runPhase.value === RUN_PHASES.GAME_OVER) {
+    audio.playBgm(gameWon.value ? 'win' : 'lose')
+  } else {
+    const track = PHASE_TO_BGM[runPhase.value]
+    if (track) audio.playBgm(track)
+  }
+  window.removeEventListener('pointerdown', unlockOnFirstInteraction)
+  window.removeEventListener('keydown', unlockOnFirstInteraction)
+}
+
+function delegateButtonSfx(e) {
+  const target = e.target
+  if (!(target instanceof Element)) return
+  const btn = target.closest('button, [role="button"]')
+  if (!btn) return
+  if (btn.dataset.noSfx === 'true') return
+  if (e.type === 'pointerdown') audio.playSfx('uiClick')
+  else if (e.type === 'pointerenter') audio.playSfx('uiHover')
+}
+
+watch(runPhase, (next) => {
+  if (next === RUN_PHASES.GAME_OVER) {
+    audio.playSfx(gameWon.value ? 'winStinger' : 'loseStinger')
+    audio.playBgm(gameWon.value ? 'win' : 'lose')
+    return
+  }
+  const track = PHASE_TO_BGM[next]
+  audio.playBgm(track)
+}, { immediate: false })
+
 onMounted(() => {
   setRunPhase(RUN_PHASES.SETUP)
+  window.addEventListener('pointerdown', unlockOnFirstInteraction)
+  window.addEventListener('keydown', unlockOnFirstInteraction)
+  document.addEventListener('pointerdown', delegateButtonSfx)
+  document.addEventListener('pointerenter', delegateButtonSfx, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', unlockOnFirstInteraction)
+  window.removeEventListener('keydown', unlockOnFirstInteraction)
+  document.removeEventListener('pointerdown', delegateButtonSfx)
+  document.removeEventListener('pointerenter', delegateButtonSfx, true)
 })
 </script>
 
 <template>
   <div class="balatro-shell">
+    <!-- 全局设置入口（任意 phase 可见） -->
+    <button
+      class="hud-icon-btn settings-trigger"
+      data-no-sfx="true"
+      aria-label="设置"
+      @click="openSettings"
+    >⚙</button>
+    <SettingsPanel :open="settingsOpen" @close="closeSettings" />
+
     <!-- 牌型弹出 banner -->
     <Transition name="hand-type-pop">
       <div
@@ -2804,5 +2876,29 @@ onMounted(() => {
   .info-row-played {
     text-align: center;
   }
+}
+
+/* 全局设置齿轮按钮（fixed 右上角，所有 phase 可见） */
+.hud-icon-btn.settings-trigger {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(20, 14, 36, 0.78);
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  color: #ffd166;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 250;
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease, background 0.15s ease;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+}
+.hud-icon-btn.settings-trigger:hover {
+  transform: rotate(45deg);
+  background: rgba(40, 26, 70, 0.9);
 }
 </style>

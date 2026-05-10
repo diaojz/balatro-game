@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import gsap from 'gsap'
+import * as audio from '../utils/audio.js'
 
 const props = defineProps({
   value: { type: Number, required: true },
@@ -9,6 +10,8 @@ const props = defineProps({
 
 const tweenObj = ref({ value: props.value })
 const displayValue = ref(props.value)
+
+let lastTickAt = 0
 
 watch(
   () => props.value,
@@ -20,6 +23,11 @@ watch(
       snap: { value: 1 },
       onUpdate: () => {
         displayValue.value = Math.floor(tweenObj.value.value)
+        const now = performance.now()
+        if (now - lastTickAt > 50) {
+          audio.playSfx('scoreTick')
+          lastTickAt = now
+        }
       }
     })
   }
