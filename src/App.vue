@@ -192,23 +192,119 @@ function recommendedKindOf(cardId) {
   return null
 }
 
-// ========== v1.10.0 A4：商店建议数据流 ==========
+// ========== v1.11.0 B4：createGameState 工厂 ==========
+// 把所有游戏核心 ref 与派生 computed 集中创建。
+// 单 AI 托管模式调用一次，双 AI 对战（未来）可调用两次各自独立。
+// AI 教练相关 ref（aiScene/aiVisible/aiPayload/aiRecommendedCardIds 等）不属于游戏核心 state，
+// 保留在 App.vue 顶层，不纳入工厂。
 
-/**
- * 商店区 Joker 加稳定 shopJokerId（格式：sh_0、sh_1、sh_2）
- * 用于 serializeShopState / AI 建议 targetId 匹配
- */
-const shopJokersWithIds = computed(() =>
-  shopJokers.value.map((j, i) => ({ ...j, shopJokerId: `sh_${i}` }))
-)
+function createGameState() {
+  // ---- 15 个游戏核心 ref ----
+  const deck             = ref([])
+  const discardPile      = ref([])
+  const hand             = ref([])
+  const playedCards      = ref([])
+  const ownedJokers      = ref([])
+  const shopJokers       = ref([])
+  const currentBlind     = ref(0)
+  const totalScore       = ref(0)
+  const handsLeft        = ref(4)
+  const discardsLeft     = ref(3)
+  const money            = ref(4)
+  const lastPlayedHand   = ref(null)
+  const lastScore        = ref(0)
+  const completedBlindIds = ref([])
+  const runPhase         = ref(RUN_PHASES.SETUP)
 
-/**
- * 已拥有 Joker 加稳定 ownedJokerId（格式：oj_0 … oj_4）
- * 用于 serializeShopState / AI 建议 targetId 匹配
- */
-const ownedJokersWithIds = computed(() =>
-  ownedJokers.value.map((j, i) => ({ ...j, ownedJokerId: `oj_${i}` }))
-)
+  // ---- 派生 computed（沿用 v1.10.0 已实现的逻辑）----
+
+  /** 当前盲注对象（同 v1.10.0 的 blind computed） */
+  const blind = computed(() => BLINDS[currentBlind.value] ?? BLINDS[0])
+
+  /** 当前 ante 编号 */
+  const currentAnte = computed(() => blind.value?.ante ?? 1)
+
+  /** 当前 ante 全部盲注列表 */
+  const currentAnteBlinds = computed(() => BLINDS.filter(item => item.ante === currentAnte.value))
+
+  /**
+   * 可选盲注列表（带状态标注）。
+   * 文档别名 candidateBlinds，同时以 availableBlindOptions 暴露保持向后兼容。
+   */
+  const availableBlindOptions = computed(() => {
+    const anteBlinds = currentAnteBlinds.value
+    const nextChallengeBlind = anteBlinds.find(item => !completedBlindIds.value.includes(item.id))
+
+    return anteBlinds.map((item, index) => {
+      const previousBlind = index > 0 ? anteBlinds[index - 1] : null
+      const isCompleted = completedBlindIds.value.includes(item.id)
+      const isUnlocked = !previousBlind || completedBlindIds.value.includes(previousBlind.id)
+      const isCurrent = item.id === blind.value?.id
+      const canChallenge = isUnlocked && !isCompleted
+      const isRecommended = nextChallengeBlind?.id === item.id && canChallenge
+      const statusTone = isCompleted ? 'cleared' : canChallenge ? 'available' : 'locked'
+      const statusLabel = isCompleted ? '已完成' : canChallenge ? '当前挑战' : '未解锁'
+      const actionLabel = isCompleted
+        ? '已通关'
+        : isRecommended
+          ? '下一步：点击开始'
+          : canChallenge
+            ? '可挑战'
+            : '需先完成前一项'
+
+      return {
+        ...item,
+        isCompleted,
+        isUnlocked,
+        isCurrent,
+        canChallenge,
+        isRecommended,
+        statusTone,
+        statusLabel,
+        actionLabel
+      }
+    })
+  })
+
+  /**
+   * 商店区 Joker 加稳定 shopJokerId（格式：sh_0、sh_1、sh_2）
+   * 用于 serializeShopState / AI 建议 targetId 匹配
+   */
+  const shopJokersWithIds = computed(() =>
+    shopJokers.value.map((j, i) => ({ ...j, shopJokerId: `sh_${i}` }))
+  )
+
+  /**
+   * 已拥有 Joker 加稳定 ownedJokerId（格式：oj_0 … oj_4）
+   * 用于 serializeShopState / AI 建议 targetId 匹配
+   */
+  const ownedJokersWithIds = computed(() =>
+    ownedJokers.value.map((j, i) => ({ ...j, ownedJokerId: `oj_${i}` }))
+  )
+
+  return {
+    // refs
+    deck, discardPile, hand, playedCards, ownedJokers, shopJokers,
+    currentBlind, totalScore, handsLeft, discardsLeft, money,
+    lastPlayedHand, lastScore, completedBlindIds, runPhase,
+    // computeds
+    blind, currentAnte, currentAnteBlinds, availableBlindOptions,
+    candidateBlinds: availableBlindOptions, // 文档别名，供 ai-pilot.js 使用
+    shopJokersWithIds, ownedJokersWithIds
+  }
+}
+
+// 创建主 game state 实例（默认单 AI 托管 / 玩家手动操作共用同一份 state）
+const gameState = createGameState()
+
+// 解构出来，保持现有所有引用（deck.value / hand.value 等）完全不变
+const {
+  deck, discardPile, hand, playedCards, ownedJokers, shopJokers,
+  currentBlind, totalScore, handsLeft, discardsLeft, money,
+  lastPlayedHand, lastScore, completedBlindIds, runPhase,
+  blind, currentAnte, currentAnteBlinds, availableBlindOptions,
+  shopJokersWithIds, ownedJokersWithIds
+} = gameState
 
 // ========== v1.10.0 A7：scene-aware 水晶球 computed ==========
 
@@ -387,20 +483,9 @@ async function requestBlindAdviceNow() {
   }
 }
 
-const deck = ref([])
-const discardPile = ref([])
-const hand = ref([])
-const currentBlind = ref(0)
-const totalScore = ref(0)
-const handsLeft = ref(4)
-const discardsLeft = ref(3)
-const money = ref(4)
+// 游戏核心 ref（deck/discardPile/hand 等 15 个）已通过 createGameState() 解构，此处不再重复声明。
 const gameWon = ref(false)
-const lastPlayedHand = ref(null)
-const lastScore = ref(0)
-const playedCards = ref([])
 const showPlayedCards = ref(false)
-const ownedJokers = ref([])
 const maxJokers = 5
 const HAND_SIZE = 8
 
@@ -408,7 +493,6 @@ const effectiveHandSize = computed(() => {
   if (blind.value?.bossRule?.key === 'LOW_HAND_SIZE') return HAND_SIZE - 1
   return HAND_SIZE
 })
-const shopJokers = ref([])
 const triggeredJokerIds = ref([])
 const shimmeringJokerIds = ref([])
 const handCardRefs = ref([])
@@ -451,10 +535,9 @@ function wait(ms) {
 const toastType = ref('info')
 const showToast = ref(false)
 const showHandInfo = ref(false)
-const runPhase = ref(RUN_PHASES.SETUP)
+// runPhase、completedBlindIds 已通过 createGameState() 解构，此处不再重复声明。
 const selectedDeckOption = ref(STARTER_DECK_OPTIONS[0].key)
 const selectedDifficultyOption = ref(DIFFICULTY_OPTIONS[0].key)
-const completedBlindIds = ref([])
 const selectedBlindId = ref(null)
 
 const selectedDeckConfig = computed(
@@ -463,47 +546,11 @@ const selectedDeckConfig = computed(
 const selectedDifficultyConfig = computed(
   () => DIFFICULTY_OPTIONS.find(option => option.key === selectedDifficultyOption.value) ?? DIFFICULTY_OPTIONS[0]
 )
-const blind = computed(() => BLINDS[currentBlind.value] ?? BLINDS[0])
-const currentAnte = computed(() => blind.value?.ante ?? 1)
-const currentAnteBlinds = computed(() => BLINDS.filter(item => item.ante === currentAnte.value))
+// blind、currentAnte、currentAnteBlinds、availableBlindOptions 已通过 createGameState() 解构，此处不再重复声明。
 const currentBlindProgress = computed(() => {
   const total = currentAnteBlinds.value.length
   const cleared = currentAnteBlinds.value.filter(item => completedBlindIds.value.includes(item.id)).length
   return `${cleared}/${total}`
-})
-const availableBlindOptions = computed(() => {
-  const anteBlinds = currentAnteBlinds.value
-  const nextChallengeBlind = anteBlinds.find(item => !completedBlindIds.value.includes(item.id))
-
-  return anteBlinds.map((item, index) => {
-    const previousBlind = index > 0 ? anteBlinds[index - 1] : null
-    const isCompleted = completedBlindIds.value.includes(item.id)
-    const isUnlocked = !previousBlind || completedBlindIds.value.includes(previousBlind.id)
-    const isCurrent = item.id === blind.value?.id
-    const canChallenge = isUnlocked && !isCompleted
-    const isRecommended = nextChallengeBlind?.id === item.id && canChallenge
-    const statusTone = isCompleted ? 'cleared' : canChallenge ? 'available' : 'locked'
-    const statusLabel = isCompleted ? '已完成' : canChallenge ? '当前挑战' : '未解锁'
-    const actionLabel = isCompleted
-      ? '已通关'
-      : isRecommended
-        ? '下一步：点击开始'
-        : canChallenge
-          ? '可挑战'
-          : '需先完成前一项'
-
-    return {
-      ...item,
-      isCompleted,
-      isUnlocked,
-      isCurrent,
-      canChallenge,
-      isRecommended,
-      statusTone,
-      statusLabel,
-      actionLabel
-    }
-  })
 })
 const selectedCards = computed(() => hand.value.filter(card => card.selected))
 const selectedCardCount = computed(() => selectedCards.value.length)
