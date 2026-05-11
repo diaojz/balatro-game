@@ -1,5 +1,5 @@
 /**
- * game-actor.js — v3.3.0 AI 托管模式的游戏动作执行手
+ * game-actor.js — v3.2.0 AI 托管模式的游戏动作执行手
  *
  * createGameActor({ refs, actions }) 工厂函数接收：
  *   refs    — 一组 ref/computed，actor 用来读当前状态做前置校验
@@ -264,7 +264,7 @@ export function createGameActor({ refs, actions }) {
    * 跳过/离开商店（等价于点"跳过"按钮）
    * 前置：runPhase === 'shop' 或 'pack'
    *
-   * pack 阶段兼容处理（v3.3.0 AI 不处理卡包，统一跳过）：
+   * pack 阶段兼容处理（v3.2.0 AI 不处理卡包，统一跳过）：
    *   - 当 runPhase === 'pack' 时，优先走 actions.skipPack（若存在），
    *     否则复用 actions.skipShop（语义上等效——都是"跳过当前阶段进入下一步"）。
    */
@@ -318,7 +318,7 @@ export function createGameActor({ refs, actions }) {
    * 结算页（reward）自动进入商店
    * 前置：runPhase === 'reward'
    *
-   * 在当前 v3.2.0 实现中，passBlind() 会在 setTimeout 后自动调用 openShop()，
+   * 在当前 v3.1.0 实现中，passBlind() 会在 setTimeout 后自动调用 openShop()，
    * runPhase 自动跳 shop，不需要玩家额外点击。
    * 但为了让 ai-pilot 在 reward 阶段有明确的"我已知晓结算"行为，
    * actor 提供此方法：若 actions.proceedToShop 存在则调用，否则直接返回 ok。
@@ -340,7 +340,7 @@ export function createGameActor({ refs, actions }) {
    * 开启下一 ante（Boss 盲注通过后，若版本需要手动触发）
    * 前置：无强制 phase 约束（某些版本在 shop/blind-select 之间有中间态）
    *
-   * 当前 v3.2.0 中，ante 推进是 closeShop() 自动完成的，
+   * 当前 v3.1.0 中，ante 推进是 closeShop() 自动完成的，
    * 此方法作为保留接口，若 actions.startNextAnte 未定义则静默成功。
    */
   async function startNextAnte() {

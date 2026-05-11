@@ -28,7 +28,7 @@ const props = defineProps({
     default: false
   },
   recommended: {
-    // v3.2.0：枚举 'play' | 'discard' | null，Boolean true 视同 'play'（向后兼容）
+    // v3.1.0：枚举 'play' | 'discard' | null，Boolean true 视同 'play'（向后兼容）
     type: [Boolean, String],
     default: null,
     validator: (v) => v === null || v === false || v === true || v === 'play' || v === 'discard'
@@ -61,7 +61,7 @@ const isRed = computed(() => {
   return props.card.suit === 'hearts' || props.card.suit === 'diamonds'
 })
 
-// v3.2.0：把 Boolean true 视同 'play'，统一归一为枚举值
+// v3.1.0：把 Boolean true 视同 'play'，统一归一为枚举值
 const recommendedKind = computed(() => {
   if (props.recommended === 'discard') return 'discard'
   if (props.recommended) return 'play'   // true 或 'play' 都走此分支
@@ -72,7 +72,7 @@ const cardClasses = computed(() => {
   return [
     'playing-card',
     { 'selected': props.selected },
-    // v3.2.0：按 recommendedKind 切换两种高亮 class
+    // v3.1.0：按 recommendedKind 切换两种高亮 class
     { 'is-recommended-play':    recommendedKind.value === 'play' },
     { 'is-recommended-discard': recommendedKind.value === 'discard' },
     // 旧 class 保留：向下兼容可能存在的外部 CSS 引用
@@ -321,7 +321,7 @@ defineExpose({ cardRef })
   outline-offset: 2px;
 }
 
-/* v3.2.0：出牌推荐——金色描边 + 缓慢光晕呼吸 */
+/* v3.1.0：出牌推荐——金色描边 + 缓慢光晕呼吸 */
 .playing-card.is-recommended-play {
   outline: 3px solid var(--gold, #ffd166);
   outline-offset: 2px;
@@ -333,7 +333,7 @@ defineExpose({ cardRef })
   50%      { box-shadow: 0 0 22px 6px rgba(255, 209, 102, .85); }
 }
 
-/* v3.2.0：弃牌推荐——红色描边 + 红色光晕呼吸（警示配色） */
+/* v3.1.0：弃牌推荐——红色描边 + 红色光晕呼吸（警示配色） */
 .playing-card.is-recommended-discard {
   outline: 3px solid var(--danger, #e34b6f);
   outline-offset: 2px;

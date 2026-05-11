@@ -7,13 +7,13 @@ import * as audio from '../utils/audio.js'
 const props = defineProps({
   // v3.0.0 已有：是否显示水晶球
   visible: { type: Boolean, default: true },
-  // v3.2.0 扩展：当前决策场景
+  // v3.1.0 扩展：当前决策场景
   scene:   {
     type: String,
     default: 'play',
     validator: v => ['play', 'discard', 'shop', 'blind'].includes(v)
   },
-  // v3.2.0 扩展：scene 对应的原始 payload（由父组件按 scene 准备）
+  // v3.1.0 扩展：scene 对应的原始 payload（由父组件按 scene 准备）
   payload: { type: Object, default: null }
 })
 const emit = defineEmits(['recommend', 'clear', 'toast'])
@@ -95,7 +95,7 @@ async function ask() {
       return
     }
     advice.value = result
-    // v3.2.0：emit 整个 advice 对象，父组件按 scene 决定高亮逻辑
+    // v3.1.0：emit 整个 advice 对象，父组件按 scene 决定高亮逻辑
     emit('recommend', result)
     audio.playSfx('aiPing')
     status.value = 'done'
