@@ -58,7 +58,7 @@ const settingsOpen = ref(false)
 function openSettings() { settingsOpen.value = true }
 function closeSettings() { settingsOpen.value = false }
 
-// v1.11.1：settings 响应式版本计数器。
+// v3.4.0：settings 响应式版本计数器。
 // subscribeSettings 回调每次触发时自增，使下方 AI computed 自动重新计算。
 const settingsVersion = ref(0)
 let _unsubscribeSettings = null
@@ -74,18 +74,18 @@ function closeJokerDetail() { detailJoker.value = null }
 
 // AI 教练推荐高亮
 const aiRecommendedCardIds = ref([])
-// v1.10.0：弃牌推荐 ids 占位，A6 接入弃牌 AI 时正式赋值
+// v3.2.0：弃牌推荐 ids 占位，A6 接入弃牌 AI 时正式赋值
 const aiDiscardRecommendedIds = ref([])
 
 /**
- * v1.10.0 A4：商店建议对象
+ * v3.2.0 A4：商店建议对象
  * 结构同 validateShopAdvice 返回值：{ scene, action, targetId, reasoning, confidence }
  * action: 'buy' | 'sell' | 'reroll' | 'skip'
  * targetId: shopJokerId / ownedJokerId（reroll/skip 时为 null）
  */
 const aiShopAdvice = ref(null)
 
-// v1.10.0 A6：弃牌模式开关。true = 当前处于弃牌建议场景，PlayingCard 红色高亮由 aiDiscardRecommendedIds 驱动
+// v3.2.0 A6：弃牌模式开关。true = 当前处于弃牌建议场景，PlayingCard 红色高亮由 aiDiscardRecommendedIds 驱动
 const isDiscardMode = ref(false)
 
 /**
@@ -142,7 +142,7 @@ if (import.meta.env.DEV) {
 }
 
 /**
- * v1.10.0 A7：onAiRecommend 重写为 4 路分发
+ * v3.2.0 A7：onAiRecommend 重写为 4 路分发
  * AiCoachOverlay 现在 emit 整个 advice 对象（不再是 ids 数组）
  * @param {Object} advice - 整个 advice 对象，含 scene 字段
  */
@@ -172,7 +172,7 @@ function onAiRecommend(advice) {
 }
 
 /**
- * v1.10.0 A7：onAiClear 清空所有 4 路 advice
+ * v3.2.0 A7：onAiClear 清空所有 4 路 advice
  */
 function onAiClear() {
   aiRecommendedCardIds.value = []
@@ -186,7 +186,7 @@ function onAiToast(payload) {
 }
 
 /**
- * v1.10.0：按 cardId 返回推荐类型枚举
+ * v3.2.0：按 cardId 返回推荐类型枚举
  * - 出牌建议命中 → 'play'（金色高亮）
  * - 弃牌建议命中 → 'discard'（红色高亮）
  * - 否则 → null
@@ -200,7 +200,7 @@ function recommendedKindOf(cardId) {
   return null
 }
 
-// ========== v1.11.0 B4：createGameState 工厂 ==========
+// ========== v3.3.0 B4：createGameState 工厂 ==========
 // 把所有游戏核心 ref 与派生 computed 集中创建。
 // 单 AI 托管模式调用一次，双 AI 对战（未来）可调用两次各自独立。
 // AI 教练相关 ref（aiScene/aiVisible/aiPayload/aiRecommendedCardIds 等）不属于游戏核心 state，
@@ -224,9 +224,9 @@ function createGameState() {
   const completedBlindIds = ref([])
   const runPhase         = ref(RUN_PHASES.SETUP)
 
-  // ---- 派生 computed（沿用 v1.10.0 已实现的逻辑）----
+  // ---- 派生 computed（沿用 v3.2.0 已实现的逻辑）----
 
-  /** 当前盲注对象（同 v1.10.0 的 blind computed） */
+  /** 当前盲注对象（同 v3.2.0 的 blind computed） */
   const blind = computed(() => BLINDS[currentBlind.value] ?? BLINDS[0])
 
   /** 当前 ante 编号 */
@@ -314,7 +314,7 @@ const {
   shopJokersWithIds, ownedJokersWithIds
 } = gameState
 
-// ========== v1.11.0 B6：AI 托管启停三件套 ==========
+// ========== v3.3.0 B6：AI 托管启停三件套 ==========
 
 /** 当前托管 overlay 是否可见 */
 const pilotVisible = ref(false)
@@ -338,20 +338,20 @@ function providerLabelOf(name) {
 
 /** 当前全局供应商的显示标签 */
 const pilotProviderLabel = computed(() => {
-  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  settingsVersion.value // v3.4.0：依赖 settingsVersion，settings 变化时自动重算
   return providerLabelOf(getSettings().provider)
 })
 
 /** 是否满足启动单人托管的条件 */
 const canStartSoloPilot = computed(() => {
-  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  settingsVersion.value // v3.4.0：依赖 settingsVersion，settings 变化时自动重算
   const s = getSettings()
   return !!(s.enabled && hasProviderConfigured(s.provider))
 })
 
 /** 不满足时的提示文案 */
 const soloPilotDisabledReason = computed(() => {
-  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  settingsVersion.value // v3.4.0：依赖 settingsVersion，settings 变化时自动重算
   const s = getSettings()
   if (!s.enabled) return 'AI 未启用，请先到设置中启用'
   if (!hasProviderConfigured(s.provider)) return '当前供应商未配置 API Key'
@@ -360,19 +360,19 @@ const soloPilotDisabledReason = computed(() => {
 
 /**
  * 双 AI 对战是否可启动：需要 Anthropic + OpenAI 两个 Key 都配置。
- * v1.11.0 降级版：仅渲染按钮（始终 disabled），双路 state 机制留 v1.12 实现。
+ * v3.3.0 降级版：仅渲染按钮（始终 disabled），双路 state 机制留 v3.6.0 实现。
  */
 const canStartDuelPilot = computed(() => {
-  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  settingsVersion.value // v3.4.0：依赖 settingsVersion，settings 变化时自动重算
   return !!(hasProviderConfigured('anthropic') && hasProviderConfigured('openai'))
 })
 
 /** 双 AI 对战不可用时的提示文案 */
 const duelPilotDisabledReason = computed(() => {
-  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  settingsVersion.value // v3.4.0：依赖 settingsVersion，settings 变化时自动重算
   if (!hasProviderConfigured('anthropic')) return '需要 Anthropic API Key（设置中配置）'
   if (!hasProviderConfigured('openai')) return '需要 OpenAI API Key（设置中配置）'
-  return '双 AI 对战 v1.11.0 仅显示主屏 + 日志（完整双路将于 v1.12 上线）'
+  return '双 AI 对战 v3.3.0 仅显示主屏 + 日志（完整双路将于 v3.6.0 上线）'
 })
 
 /**
@@ -507,7 +507,7 @@ function exportPilotLog() {
   URL.revokeObjectURL(url)
 }
 
-// ========== v1.10.0 A7：scene-aware 水晶球 computed ==========
+// ========== v3.2.0 A7：scene-aware 水晶球 computed ==========
 
 /**
  * 当前应向 AiCoachOverlay 传递的 scene 字符串
@@ -619,7 +619,7 @@ async function requestShopAdviceNow() {
   }
 }
 
-// ========== v1.10.0 A5：盲注决策建议数据流 ==========
+// ========== v3.2.0 A5：盲注决策建议数据流 ==========
 
 /**
  * AI 盲注选择建议结果
@@ -831,7 +831,7 @@ const shopRefreshState = computed(() => {
   }
 })
 const shopOfferStates = computed(() =>
-  // v1.10.0 A4：加入 shopJokerId 以供 shopRecommendedKindOf 使用
+  // v3.2.0 A4：加入 shopJokerId 以供 shopRecommendedKindOf 使用
   shopJokers.value.map((joker, i) => {
     const canAfford = money.value >= joker.price
     const hasSlot = ownedJokers.value.length < maxJokers
@@ -984,9 +984,9 @@ function selectBlind(blindId) {
   currentBlind.value = targetBlindIndex
   selectedBlindId.value = blindId
 
-  // v1.10.0 A5：点击选择盲注后立即清空 AI 盲注推荐高亮
+  // v3.2.0 A5：点击选择盲注后立即清空 AI 盲注推荐高亮
   aiBlindAdvice.value = null
-  // v1.10.0 A6：进入 battle 时清空弃牌推荐高亮 + 弃牌模式
+  // v3.2.0 A6：进入 battle 时清空弃牌推荐高亮 + 弃牌模式
   aiDiscardRecommendedIds.value = []
   isDiscardMode.value = false
 
@@ -1458,7 +1458,7 @@ async function playHand() {
 function discardCards() {
   if (isResolvingHand.value) return
   onAiClear()
-  // v1.10.0 A6：实际弃牌时同步清空弃牌推荐高亮 + 退出弃牌模式
+  // v3.2.0 A6：实际弃牌时同步清空弃牌推荐高亮 + 退出弃牌模式
   aiDiscardRecommendedIds.value = []
   isDiscardMode.value = false
   const selected = selectedCards.value
@@ -1557,7 +1557,7 @@ function rerollShop() {
     return
   }
 
-  // v1.10.0 A4：刷新商店时清空 AI 建议高亮
+  // v3.2.0 A4：刷新商店时清空 AI 建议高亮
   aiShopAdvice.value = null
   money.value -= 1
   audio.playSfx('shopReroll')
@@ -1566,7 +1566,7 @@ function rerollShop() {
 }
 
 function closeShop() {
-  // v1.10.0 A4：跳过商店时清空 AI 建议高亮
+  // v3.2.0 A4：跳过商店时清空 AI 建议高亮
   aiShopAdvice.value = null
   const nextBlindIndex = currentBlind.value + 1
   const nextBlind = BLINDS[nextBlindIndex]
@@ -1594,7 +1594,7 @@ function buyJoker(joker) {
     return
   }
 
-  // v1.10.0 A4：购买后清空 AI 建议高亮
+  // v3.2.0 A4：购买后清空 AI 建议高亮
   aiShopAdvice.value = null
   money.value -= joker.price
   ownedJokers.value.push({ ...joker })
@@ -1604,7 +1604,7 @@ function buyJoker(joker) {
 }
 
 function sellJoker(joker) {
-  // v1.10.0 A4：卖出后清空 AI 建议高亮
+  // v3.2.0 A4：卖出后清空 AI 建议高亮
   aiShopAdvice.value = null
   const sellPrice = Math.floor(joker.price / 2)
   money.value += sellPrice
@@ -1692,7 +1692,7 @@ watch(runPhase, (next) => {
     audio.playBgm(gameWon.value ? 'win' : 'lose')
     return
   }
-  // v1.10.0 A7：阶段切换时统一清空所有 4 路 AI 建议（onAiClear 内部清空全部）
+  // v3.2.0 A7：阶段切换时统一清空所有 4 路 AI 建议（onAiClear 内部清空全部）
   onAiClear()
   // 退出 battle 时重置弃牌模式
   if (next !== RUN_PHASES.BATTLE) isDiscardMode.value = false
@@ -1706,7 +1706,7 @@ onMounted(() => {
   window.addEventListener('keydown', unlockOnFirstInteraction)
   document.addEventListener('pointerdown', delegateButtonSfx)
   document.addEventListener('pointerenter', delegateButtonSfx, true)
-  // v1.11.1：订阅 settings 变更，触发 AI 相关 computed 重新计算
+  // v3.4.0：订阅 settings 变更，触发 AI 相关 computed 重新计算
   _unsubscribeSettings = subscribeSettings(() => { settingsVersion.value++ })
 })
 
@@ -1715,7 +1715,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', unlockOnFirstInteraction)
   document.removeEventListener('pointerdown', delegateButtonSfx)
   document.removeEventListener('pointerenter', delegateButtonSfx, true)
-  // v1.11.1：组件卸载时取消订阅，避免内存泄漏
+  // v3.4.0：组件卸载时取消订阅，避免内存泄漏
   _unsubscribeSettings?.()
   _unsubscribeSettings = null
 })
@@ -1874,7 +1874,7 @@ onBeforeUnmount(() => {
               开始游戏
             </button>
 
-            <!-- v1.11.0 B6：AI 托管模式入口 -->
+            <!-- v3.3.0 B6：AI 托管模式入口 -->
             <button
               class="btn-ai-pilot"
               :disabled="!canStartSoloPilot"
@@ -1883,7 +1883,7 @@ onBeforeUnmount(() => {
             >
               🔮 AI 托管模式
             </button>
-            <!-- v1.11.0 B7：双 AI 对战入口（v1.11 降级版：按钮存在，完整双路留 v1.12） -->
+            <!-- v3.3.0 B7：双 AI 对战入口（v3.3.0 降级版：按钮存在，完整双路留 v3.6.0） -->
             <button
               class="btn-ai-duel"
               :disabled="true"
@@ -1950,7 +1950,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="bottom-bar">
-            <!-- v1.10.0 A7：盲注阶段水晶球 -->
+            <!-- v3.2.0 A7：盲注阶段水晶球 -->
             <AiCoachOverlay
               :visible="aiVisible && isBlindSelectPhase"
               :scene="aiScene"
@@ -1987,7 +1987,7 @@ onBeforeUnmount(() => {
               >
                 刷新 · $1
               </button>
-              <!-- v1.10.0 A7：商店阶段水晶球 -->
+              <!-- v3.2.0 A7：商店阶段水晶球 -->
               <AiCoachOverlay
                 :visible="aiVisible && isShopPhase"
                 :scene="aiScene"
@@ -2009,7 +2009,7 @@ onBeforeUnmount(() => {
                 :class="{ unavailable: !joker.canBuy }"
               >
                 <div class="shop-item-art-wrap">
-                  <!-- v1.10.0 A4：接入商店建议高亮（buy） -->
+                  <!-- v3.2.0 A4：接入商店建议高亮（buy） -->
                   <JokerCard
                     :joker="joker"
                     size="shop"
@@ -2038,7 +2038,7 @@ onBeforeUnmount(() => {
           <div class="shop-owned">
             <p class="shop-section-label">已拥有 · {{ ownedJokers.length }} / {{ maxJokers }}（点击卡片可出售）</p>
             <div class="shop-owned-row">
-              <!-- v1.10.0 A4：接入商店建议高亮（sell），用 ownedJokersWithIds 提供稳定 ownedJokerId -->
+              <!-- v3.2.0 A4：接入商店建议高亮（sell），用 ownedJokersWithIds 提供稳定 ownedJokerId -->
               <JokerCard
                 v-for="(joker, idx) in ownedJokersWithIds"
                 :key="joker.id"
@@ -2181,7 +2181,7 @@ onBeforeUnmount(() => {
           >
             {{ isDiscardMode ? '出' : '弃' }}
           </button>
-          <!-- v1.10.0 A7：battle 阶段统一用 scene-aware AiCoachOverlay -->
+          <!-- v3.2.0 A7：battle 阶段统一用 scene-aware AiCoachOverlay -->
           <AiCoachOverlay
             :visible="aiVisible && isBattlePhase"
             :scene="aiScene"
@@ -2339,7 +2339,7 @@ onBeforeUnmount(() => {
       @close="closeJokerDetail"
     />
 
-    <!-- v1.11.0 B6：AI 托管模式全屏 overlay（内部 Teleport 到 body） -->
+    <!-- v3.3.0 B6：AI 托管模式全屏 overlay（内部 Teleport 到 body） -->
     <AiPilotMode
       :visible="pilotVisible"
       :mode="pilotMode"
@@ -2544,7 +2544,7 @@ onBeforeUnmount(() => {
 .btn-primary-lg { padding: 16px 32px; font-size: 15px; border-radius: 14px; }
 .btn-primary-sm { padding: 8px 16px; font-size: 11px; border-radius: 10px; }
 
-/* v1.11.0 B6：AI 托管模式入口按钮（金紫色调） */
+/* v3.3.0 B6：AI 托管模式入口按钮（金紫色调） */
 .btn-ai-pilot {
   display: inline-flex;
   align-items: center;
@@ -2575,7 +2575,7 @@ onBeforeUnmount(() => {
   transform: none;
 }
 
-/* v1.11.0 B7：双 AI 对战入口按钮（同色系，略小一档） */
+/* v3.3.0 B7：双 AI 对战入口按钮（同色系，略小一档） */
 .btn-ai-duel {
   display: inline-flex;
   align-items: center;
@@ -2981,7 +2981,7 @@ onBeforeUnmount(() => {
 .text-gold { color: var(--gold); }
 .text-muted { color: var(--muted); }
 
-/* v1.10.0 A5：AI 推荐盲注 — 金色描边 + 金色脉冲阴影 */
+/* v3.2.0 A5：AI 推荐盲注 — 金色描边 + 金色脉冲阴影 */
 .blind-card-recommended {
   border-color: #f0b94f;
   box-shadow: 0 12px 24px rgba(0,0,0,.45), 0 0 0 3px rgba(240,185,79,.45);
@@ -3682,7 +3682,7 @@ onBeforeUnmount(() => {
   padding: 0 6px;
 }
 
-/* v1.10.0 A7：弃牌模式切换按钮 */
+/* v3.2.0 A7：弃牌模式切换按钮 */
 .discard-mode-btn {
   width: 32px;
   height: 32px;

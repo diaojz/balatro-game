@@ -53,7 +53,7 @@ export const COACH_THROTTLE_MS = 5000
 // 请求超时：15 秒强制 abort
 export const COACH_REQUEST_TIMEOUT_MS = 15000
 
-// system prompt 模板（v1.9.0 出牌场景，一字不动）
+// system prompt 模板（v3.0.0 出牌场景，一字不动）
 export const COACH_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
 规则要点：
 - 玩家从手牌中选 1–5 张组成扑克牌型（高牌/对子/两对/三条/顺子/同花/葫芦/四条/同花顺）。
@@ -77,19 +77,19 @@ export const COACH_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家
   "confidence": 0.86
 }`
 
-// ============== v1.10.0 扩展：场景标识 ==============
+// ============== v3.2.0 扩展：场景标识 ==============
 
 export const COACH_SCENES = {
-  PLAY:    'play',     // 战斗中：选哪些牌打出（v1.9.0 原能力）
+  PLAY:    'play',     // 战斗中：选哪些牌打出（v3.0.0 原能力）
   DISCARD: 'discard',  // 战斗中：选哪些牌弃掉
   SHOP:    'shop',     // 商店中：买/卖/reroll/skip
   BLIND:   'blind'     // 盲注选择中：选哪个盲注
 }
 
-// 各场景节流独立计数。复用 v1.9.0 的 COACH_THROTTLE_MS 时长。
+// 各场景节流独立计数。复用 v3.0.0 的 COACH_THROTTLE_MS 时长。
 export const COACH_SCENE_KEYS = Object.values(COACH_SCENES)
 
-// ============== v1.10.0 扩展：弃牌 system prompt ==============
+// ============== v3.2.0 扩展：弃牌 system prompt ==============
 
 export const DISCARD_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
 玩家正面临**弃牌决策**：从手牌中选 1–5 张弃掉，换等量新牌。
@@ -111,7 +111,7 @@ export const DISCARD_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩�
 
 要求：严格 JSON、无 markdown、无前后缀文字。discardCardIds 必须是 hand 中存在的 id 子集，长度 1–5。`
 
-// ============== v1.10.0 扩展：商店 system prompt ==============
+// ============== v3.2.0 扩展：商店 system prompt ==============
 
 export const SHOP_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
 玩家正在**商店**中决策。商店提供以下动作：
@@ -137,7 +137,7 @@ export const SHOP_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家�
 
 要求：严格 JSON、无 markdown、无前后缀文字。buy 时 targetId 必须是 shopJokers 中存在的 id；sell 时 targetId 必须是 ownedJokers 中存在的 id；reroll/skip 时 targetId 为 null。`
 
-// ============== v1.10.0 扩展：盲注选择 system prompt ==============
+// ============== v3.2.0 扩展：盲注选择 system prompt ==============
 
 export const BLIND_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
 玩家正在**当前 ante 的盲注选择阶段**：当前 ante 含 3 个盲注（小盲注 / 大盲注 / Boss 盲注），按顺序解锁。
@@ -159,7 +159,7 @@ export const BLIND_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家
 
 要求：严格 JSON、无 markdown、无前后缀文字。blindId 必须是 candidateBlinds 数组中存在的 id。`
 
-// ============== v1.11.0 扩展：AI 托管节奏控制 ==============
+// ============== v3.3.0 扩展：AI 托管节奏控制 ==============
 
 // 每次 LLM 决策之间最小间隔（ms）。哪怕 LLM 返回得快，也至少等这么久，
 // 让玩家看清动效与气泡，避免演出过快"看不清"。
