@@ -22,7 +22,10 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
 import AiCoachOverlay from './components/AiCoachOverlay.vue'
-import { requestDiscardAdvice, requestShopAdvice, requestBlindAdvice, serializePlayState, serializeBlindState } from './utils/ai-coach.js'
+import AiPilotMode from './components/AiPilotMode.vue'
+import { requestDiscardAdvice, requestShopAdvice, requestBlindAdvice, serializePlayState, serializeBlindState, getSettings, hasProviderConfigured } from './utils/ai-coach.js'
+import { runAutoPilot, AiPilotAbort } from './utils/ai-pilot.js'
+import { createGameActor } from './utils/game-actor.js'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -305,6 +308,177 @@ const {
   blind, currentAnte, currentAnteBlinds, availableBlindOptions,
   shopJokersWithIds, ownedJokersWithIds
 } = gameState
+
+// ========== v1.11.0 B6：AI 托管启停三件套 ==========
+
+/** 当前托管 overlay 是否可见 */
+const pilotVisible = ref(false)
+/** 托管模式：'solo' | 'duel' */
+const pilotMode = ref('solo')
+/** 决策日志条目列表 */
+const pilotLog = ref([])
+/** 主循环是否正在运行 */
+const pilotIsRunning = ref(false)
+/** AbortController 实例（let，不做响应式） */
+let pilotAbortCtrl = null
+
+/**
+ * 供应商 key → 显示标签
+ * @param {string} name
+ * @returns {string}
+ */
+function providerLabelOf(name) {
+  return { anthropic: 'Claude', openai: 'GPT', deepseek: 'DeepSeek' }[name] ?? name ?? '未知'
+}
+
+/** 当前全局供应商的显示标签 */
+const pilotProviderLabel = computed(() => providerLabelOf(getSettings().provider))
+
+/** 是否满足启动单人托管的条件 */
+const canStartSoloPilot = computed(() => {
+  const s = getSettings()
+  return !!(s.enabled && hasProviderConfigured(s.provider))
+})
+
+/** 不满足时的提示文案 */
+const soloPilotDisabledReason = computed(() => {
+  const s = getSettings()
+  if (!s.enabled) return 'AI 未启用，请先到设置中启用'
+  if (!hasProviderConfigured(s.provider)) return '当前供应商未配置 API Key'
+  return ''
+})
+
+/**
+ * 向 pilotLog 追加一条事件
+ * @param {string} side  - 'A'（主 AI）或 'B'（对战 AI）
+ * @param {object} event - 任意事件对象，at 字段若缺失则自动填充
+ */
+function pushPilotEvent(side, event) {
+  pilotLog.value.push({
+    step: pilotLog.value.length,
+    at: event.at ?? Date.now(),
+    side,
+    ...event
+  })
+}
+
+/**
+ * 把 gameState refs + App.vue 已有方法包装为 game-actor 所需的 actions 对象。
+ *
+ * 接口对照：
+ *   actor actions key   → App.vue 函数         说明
+ *   ─────────────────────────────────────────────────────
+ *   playHand()          → playHand()           同名，无需转换
+ *   discard()           → discardCards()        名字不同，做映射
+ *   buyJoker(joker)     → buyJoker(joker)       同名，actor 已查好完整 joker 对象传入
+ *   sellJoker(joker)    → sellJoker(joker)      同名，actor 已查好完整 joker 对象传入
+ *   rerollShop()        → rerollShop()          同名
+ *   skipShop()          → closeShop()           名字不同，做映射
+ *   selectBlind(id)     → selectBlind(id)       同名，传 blindId 字符串
+ *   proceedToShop()     → （不存在，passBlind 自动走 openShop，actor 内有容错）
+ *   startNextAnte()     → （不存在，closeShop 自动推进 ante，actor 内有容错）
+ */
+function makeActionsFor() {
+  return {
+    playHand:   () => playHand(),
+    discard:    () => discardCards(),
+    buyJoker:   (joker) => buyJoker(joker),
+    sellJoker:  (joker) => sellJoker(joker),
+    rerollShop: () => rerollShop(),
+    skipShop:   () => closeShop(),
+    selectBlind:(blindId) => selectBlind(blindId),
+    // proceedToShop 不显式提供，game-actor 内部有 ?. 容错
+    // startNextAnte 不显式提供，game-actor 内部有 ?. 容错
+  }
+}
+
+/**
+ * 把游戏状态重置到"准备开始一局"的状态，并进入 blind-select 阶段。
+ * 直接复用已有的 initGame()，它内部会调 showBlindSelect()。
+ */
+function initGameStateForRun() {
+  initGame()
+}
+
+/**
+ * 启动单人 AI 托管模式。
+ * 1. 检查 canStartSoloPilot；不满足则 toast 原因并退出
+ * 2. 重置 game state（initGame → blind-select）
+ * 3. 创建 AbortController + game-actor
+ * 4. 展示 AiPilotMode overlay
+ * 5. 调用 runAutoPilot 主循环
+ */
+async function startSoloPilot() {
+  if (!canStartSoloPilot.value) {
+    showToastMessage(soloPilotDisabledReason.value, 'warning')
+    return
+  }
+
+  pilotMode.value = 'solo'
+  pilotLog.value = []
+  pilotIsRunning.value = true
+  pilotVisible.value = true
+  pilotAbortCtrl = new AbortController()
+
+  // 重置游戏状态到 blind-select
+  initGameStateForRun()
+  await nextTick()
+
+  const actor = createGameActor({
+    refs: gameState,
+    actions: makeActionsFor()
+  })
+
+  try {
+    await runAutoPilot({
+      actor,
+      refs: gameState,
+      signal: pilotAbortCtrl.signal,
+      onTick: (event) => pushPilotEvent('A', event),
+      providerHint: null // solo 用全局当前 provider，不 override
+    })
+  } catch (err) {
+    if (err instanceof AiPilotAbort) {
+      pushPilotEvent('A', { kind: 'end', at: Date.now(), reason: 'aborted' })
+    } else {
+      pushPilotEvent('A', { kind: 'error', at: Date.now(), error: { reason: err?.message ?? String(err) } })
+    }
+  } finally {
+    pilotIsRunning.value = false
+    pilotAbortCtrl = null
+  }
+}
+
+/**
+ * 中止当前 AI 托管，把控制权交还给玩家。
+ * 游戏状态保留，玩家可继续手动操作。
+ */
+function abortPilot() {
+  if (pilotAbortCtrl) {
+    pilotAbortCtrl.abort()
+    showToastMessage('AI 托管已中止，控制权交还给你', 'info')
+  }
+}
+
+/**
+ * 导出决策日志为 JSON 文件（浏览器 download blob 方式）。
+ * 文件格式：{ version: 1, mode, exportedAt, entries: [...] }
+ */
+function exportPilotLog() {
+  const payload = {
+    version: 1,
+    mode: pilotMode.value,
+    exportedAt: new Date().toISOString(),
+    entries: pilotLog.value
+  }
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `balatro-pilot-log-${Date.now()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ========== v1.10.0 A7：scene-aware 水晶球 computed ==========
 
@@ -1667,6 +1841,16 @@ onBeforeUnmount(() => {
             <button @click="startRun" class="btn-primary-lg">
               开始游戏
             </button>
+
+            <!-- v1.11.0 B6：AI 托管模式入口 -->
+            <button
+              class="btn-ai-pilot"
+              :disabled="!canStartSoloPilot"
+              :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
+              @click="startSoloPilot"
+            >
+              🔮 AI 托管模式
+            </button>
           </div>
         </div>
       </div>
@@ -2115,6 +2299,19 @@ onBeforeUnmount(() => {
       @close="closeJokerDetail"
     />
 
+    <!-- v1.11.0 B6：AI 托管模式全屏 overlay（内部 Teleport 到 body） -->
+    <AiPilotMode
+      :visible="pilotVisible"
+      :mode="pilotMode"
+      :refsA="gameState"
+      :providerLabelA="pilotProviderLabel"
+      :log="pilotLog"
+      :is-running="pilotIsRunning"
+      @abort="abortPilot"
+      @export-log="exportPilotLog"
+      @close="pilotVisible = false"
+    />
+
     <!-- 移动端：横屏遮罩（z-index 最高，最后挂载） -->
     <OrientationGuard />
   </div>
@@ -2306,6 +2503,37 @@ onBeforeUnmount(() => {
 .btn-primary    { padding: 12px 24px; font-size: 13px; }
 .btn-primary-lg { padding: 16px 32px; font-size: 15px; border-radius: 14px; }
 .btn-primary-sm { padding: 8px 16px; font-size: 11px; border-radius: 10px; }
+
+/* v1.11.0 B6：AI 托管模式入口按钮（金紫色调） */
+.btn-ai-pilot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 13px 28px;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border-radius: 14px;
+  border: 2px solid rgba(179, 136, 255, 0.4);
+  background: linear-gradient(180deg, #7c3aed, #4c1d95);
+  color: #f3e8ff;
+  box-shadow: 0 4px 0 rgba(0,0,0,.4), 0 0 16px rgba(124, 58, 237, 0.3);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.btn-ai-pilot:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 rgba(0,0,0,.4), 0 0 24px rgba(124, 58, 237, 0.5);
+}
+.btn-ai-pilot:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .btn-ghost,
 .btn-ghost-lg,
