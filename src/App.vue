@@ -65,10 +65,28 @@ function closeJokerDetail() { detailJoker.value = null }
 
 // AI 教练推荐高亮
 const aiRecommendedCardIds = ref([])
+// v1.10.0：弃牌推荐 ids 占位，A6 接入弃牌 AI 时正式赋值
+const aiDiscardRecommendedIds = ref([])
+
 function onAiRecommend(ids) { aiRecommendedCardIds.value = ids }
 function onAiClear()        { aiRecommendedCardIds.value = [] }
 function onAiToast(payload) {
   showToastMessage(payload.text, payload.type === 'warn' ? 'warning' : 'info')
+}
+
+/**
+ * v1.10.0：按 cardId 返回推荐类型枚举
+ * - 出牌建议命中 → 'play'（金色高亮）
+ * - 弃牌建议命中 → 'discard'（红色高亮）
+ * - 否则 → null
+ * 弃牌路径数据源（aiDiscardRecommendedIds）在 A6 接通，本步以空数组占位。
+ * @param {string} cardId
+ * @returns {'play' | 'discard' | null}
+ */
+function recommendedKindOf(cardId) {
+  if (aiDiscardRecommendedIds.value.includes(cardId)) return 'discard'
+  if (aiRecommendedCardIds.value.includes(cardId)) return 'play'
+  return null
 }
 
 const deck = ref([])
@@ -1627,7 +1645,7 @@ onBeforeUnmount(() => {
               :selectable="true"
               :deal-index="index"
               compact
-              :recommended="aiRecommendedCardIds.includes(card.id)"
+              :recommended="recommendedKindOf(card.id)"
               @click="toggleCard(card)"
               :style="{
                 marginLeft: index === 0 ? '0' : '-8px',

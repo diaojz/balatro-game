@@ -28,8 +28,10 @@ const props = defineProps({
     default: false
   },
   recommended: {
-    type: Boolean,
-    default: false
+    // v1.10.0：枚举 'play' | 'discard' | null，Boolean true 视同 'play'（向后兼容）
+    type: [Boolean, String],
+    default: null,
+    validator: (v) => v === null || v === false || v === true || v === 'play' || v === 'discard'
   }
 })
 
@@ -59,11 +61,22 @@ const isRed = computed(() => {
   return props.card.suit === 'hearts' || props.card.suit === 'diamonds'
 })
 
+// v1.10.0：把 Boolean true 视同 'play'，统一归一为枚举值
+const recommendedKind = computed(() => {
+  if (props.recommended === 'discard') return 'discard'
+  if (props.recommended) return 'play'   // true 或 'play' 都走此分支
+  return null
+})
+
 const cardClasses = computed(() => {
   return [
     'playing-card',
     { 'selected': props.selected },
-    { 'recommended': props.recommended },
+    // v1.10.0：按 recommendedKind 切换两种高亮 class
+    { 'is-recommended-play':    recommendedKind.value === 'play' },
+    { 'is-recommended-discard': recommendedKind.value === 'discard' },
+    // 旧 class 保留：向下兼容可能存在的外部 CSS 引用
+    { 'is-recommended': !!recommendedKind.value },
     { 'red': isRed.value },
     { 'compact': props.compact },
     { 'selectable': props.selectable }
@@ -302,8 +315,14 @@ defineExpose({ cardRef })
   .card-border { inset: 2px; border-radius: 8px; }
 }
 
-/* AI 推荐高亮：金色描边 + 缓慢光晕呼吸 */
+/* AI 推荐高亮：旧通用 class 保留（向后兼容） */
 .playing-card.is-recommended {
+  outline: 3px solid var(--gold, #ffd166);
+  outline-offset: 2px;
+}
+
+/* v1.10.0：出牌推荐——金色描边 + 缓慢光晕呼吸 */
+.playing-card.is-recommended-play {
   outline: 3px solid var(--gold, #ffd166);
   outline-offset: 2px;
   box-shadow: 0 0 18px 4px rgba(255, 209, 102, .55);
@@ -312,5 +331,17 @@ defineExpose({ cardRef })
 @keyframes card-recommend-pulse {
   0%, 100% { box-shadow: 0 0 12px 2px rgba(255, 209, 102, .4); }
   50%      { box-shadow: 0 0 22px 6px rgba(255, 209, 102, .85); }
+}
+
+/* v1.10.0：弃牌推荐——红色描边 + 红色光晕呼吸（警示配色） */
+.playing-card.is-recommended-discard {
+  outline: 3px solid var(--danger, #e34b6f);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px 4px rgba(227, 75, 111, .55);
+  animation: card-recommend-pulse-discard 1.6s ease-in-out infinite;
+}
+@keyframes card-recommend-pulse-discard {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(227, 75, 111, .4); }
+  50%      { box-shadow: 0 0 22px 6px rgba(227, 75, 111, .85); }
 }
 </style>
