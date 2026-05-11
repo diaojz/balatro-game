@@ -22,7 +22,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
 import AiCoachOverlay from './components/AiCoachOverlay.vue'
-import { requestShopAdvice } from './utils/ai-coach.js'
+import { requestShopAdvice, requestBlindAdvice, serializeBlindState } from './utils/ai-coach.js'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -162,6 +162,71 @@ async function requestShopAdviceNow() {
       e?.reason === 'invalid_response' ? 'AI 返回了不可解析的结果' : `AI 建议失败：${e?.detail ?? e?.message ?? e}`,
       'warning'
     )
+  }
+}
+
+// ========== v1.10.0 A5：盲注决策建议数据流 ==========
+
+/**
+ * AI 盲注选择建议结果
+ * 结构：{ scene, action, blindId, riskLevel, reasoning, confidence }
+ * blindId 对应 candidateBlinds 中某项的 id
+ * @type {import('vue').Ref<{blindId:string,riskLevel:string,reasoning:string,confidence:number|null}|null>}
+ */
+const aiBlindAdvice = ref(null)
+
+/**
+ * 风险等级英文 → 中文映射
+ * @param {'low'|'medium'|'high'|string} level
+ * @returns {'低'|'中'|'高'|'未知'}
+ */
+function riskLabel(level) {
+  const map = { low: '低', medium: '中', high: '高' }
+  return map[level] ?? '未知'
+}
+
+/**
+ * 判断指定盲注 ID 是否被 AI 推荐
+ * 盲注推荐只有"推荐选这个"一种状态，没有"避开"
+ * @param {string} blindId
+ * @returns {'recommend' | null}
+ */
+function blindRecommendedKindOf(blindId) {
+  if (!aiBlindAdvice.value) return null
+  return aiBlindAdvice.value.blindId === blindId ? 'recommend' : null
+}
+
+/**
+ * 触发盲注阶段 AI 建议
+ * 调用时机：runPhase === 'blind-select'
+ * 当前不接任何 UI 入口，A7 统一由 AiCoachOverlay scene='blind' 分支调用
+ */
+async function requestBlindAdviceNow() {
+  if (runPhase.value !== RUN_PHASES.BLIND_SELECT) return
+  // candidateBlinds 为空时跳过
+  const candidates = availableBlindOptions.value
+  if (!candidates || candidates.length === 0) return
+  try {
+    const payload = serializeBlindState({
+      candidateBlinds: candidates,
+      currentAnte: currentAnte.value,
+      ownedJokers: ownedJokers.value,
+      money: money.value,
+      totalScore: totalScore.value,
+      lastPlayedHand: lastPlayedHand.value
+    })
+    const result = await requestBlindAdvice(payload)
+    // 兜底：LLM 返回的 blindId 不在 candidateBlinds 中时 console.warn（不影响 UI）
+    const candidateIds = candidates.map(b => b.id)
+    if (!candidateIds.includes(result.blindId)) {
+      console.warn('[AI Blind Advice] 返回的 blindId 不在候选列表中：', result.blindId, '候选：', candidateIds)
+    }
+    aiBlindAdvice.value = result
+    // 调试：验证盲注建议数据结构（A7 接通 Overlay 后移除）
+    console.log('[AI Blind Advice]', result)
+  } catch (e) {
+    console.error('[AI Blind Advice] 失败：', e?.reason ?? e?.message ?? e)
+    // 不污染 UI：catch 吞掉，aiBlindAdvice 保持不变（不主动清空，让用户看到上次建议）
   }
 }
 
@@ -513,6 +578,9 @@ function selectBlind(blindId) {
 
   currentBlind.value = targetBlindIndex
   selectedBlindId.value = blindId
+
+  // v1.10.0 A5：点击选择盲注后立即清空 AI 盲注推荐高亮
+  aiBlindAdvice.value = null
 
   // 进入 boss 之前冻结 most-played handType，供 The Ox 使用
   if (targetBlind.bossRule?.key === 'MOST_HAND_PENALTY') {
@@ -1217,6 +1285,8 @@ watch(runPhase, (next) => {
   if (next !== RUN_PHASES.BATTLE) onAiClear()
   // v1.10.0 A4：离开商店阶段时清空商店 AI 建议高亮
   if (next !== RUN_PHASES.SHOP) aiShopAdvice.value = null
+  // v1.10.0 A5：离开盲注选择阶段时清空盲注 AI 建议高亮
+  if (next !== RUN_PHASES.BLIND_SELECT) aiBlindAdvice.value = null
   const track = PHASE_TO_BGM[next]
   audio.playBgm(track)
 }, { immediate: false })
@@ -1423,7 +1493,8 @@ onBeforeUnmount(() => {
                 locked: !blindOption.canChallenge,
                 small: blindOption.type === 'small',
                 big: blindOption.type === 'big',
-                boss: blindOption.type === 'boss'
+                boss: blindOption.type === 'boss',
+                'blind-card-recommended': blindRecommendedKindOf(blindOption.id) === 'recommend'
               }"
             >
               <span v-if="blindOption.isRecommended && blindOption.canChallenge" class="blind-card-tag">当前选择</span>
@@ -2390,6 +2461,17 @@ onBeforeUnmount(() => {
 }
 .text-gold { color: var(--gold); }
 .text-muted { color: var(--muted); }
+
+/* v1.10.0 A5：AI 推荐盲注 — 金色描边 + 金色脉冲阴影 */
+.blind-card-recommended {
+  border-color: #f0b94f;
+  box-shadow: 0 12px 24px rgba(0,0,0,.45), 0 0 0 3px rgba(240,185,79,.45);
+  animation: blind-card-recommend-pulse 1.5s ease-in-out infinite;
+}
+@keyframes blind-card-recommend-pulse {
+  0%, 100% { box-shadow: 0 12px 24px rgba(0,0,0,.45), 0 0 16px 4px rgba(240,185,79,.35); }
+  50%      { box-shadow: 0 12px 24px rgba(0,0,0,.45), 0 0 28px 8px rgba(240,185,79,.75); }
+}
 
 /* =====================================================
    SHOP
