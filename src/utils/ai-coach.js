@@ -118,18 +118,20 @@ export function getSettings() {
 /**
  * 更新全局设置。
  * v1.11.0 扩展：
- * - 若 patch 里包含 `apiKey`，同时同步写入 `providers[currentProvider].apiKey`，
- *   保持新旧字段一致（旧 UI 单 Key 输入框继续工作）。
+ * - 若 patch 里包含 `apiKey` 且与原值不同，才同步写入 `providers[currentProvider].apiKey`。
+ *   切换 provider 时 SettingsPanel 会重发整个 patch（含 apiKey），此时 apiKey 实际未变，
+ *   不应把当前 Key 污染到新 provider 的子树（fix v1.11.2）。
  * - 切换供应商时自动跟随该供应商默认模型（v1.9.0 逻辑保留）。
  */
 export function updateSettings(patch) {
+  const prevApiKey = settings.apiKey
   Object.assign(settings, patch)
   // 切换供应商时自动跟随该供应商默认模型
   if ('provider' in patch && !('model' in patch)) {
     settings.model = AI_PROVIDERS[settings.provider].defaultModel
   }
-  // v1.11.0：顶层 apiKey 变化时同步到 providers[currentProvider].apiKey
-  if ('apiKey' in patch) {
+  // 仅当顶层 apiKey 实际变化时，同步写入当前 provider 的子树
+  if ('apiKey' in patch && patch.apiKey !== prevApiKey) {
     const pKey = settings.provider || DEFAULT_AI_SETTINGS.provider
     if (!settings.providers) settings.providers = {}
     if (!settings.providers[pKey]) settings.providers[pKey] = {}
@@ -142,7 +144,8 @@ export function updateSettings(patch) {
 
 /**
  * 解析指定 provider 应使用的 API Key。
- * 读取优先级：providers[providerKey].apiKey → 顶层 apiKey（fallback）
+ * providers 子树是权威数据源（loadSettings 启动时已迁移旧用户的顶层 apiKey）。
+ * fix v1.11.2：去掉顶层 apiKey fallback，避免切 provider 后用错误的 Key 假阳性。
  *
  * @param {string} providerKey - 供应商标识，如 'anthropic' | 'openai' | 'deepseek'
  * @param {object} [snap=settings] - 可注入一个 settings 快照，用于 per-call 透传
@@ -151,9 +154,8 @@ export function updateSettings(patch) {
 function resolveApiKey(providerKey, snap = settings) {
   const fromProviders = snap.providers?.[providerKey]?.apiKey
   if (fromProviders) return fromProviders
-  // fallback：兼容旧用户只有顶层 apiKey 的情况
-  // 只有当 providerKey 与当前 provider 匹配时才回落，避免用错误的 Key 调用别的供应商
-  if (providerKey === (snap.provider || DEFAULT_AI_SETTINGS.provider)) {
+  // 极端兜底：providers 子树缺失（loadSettings 应保证不会发生），且当前 provider 匹配
+  if (!snap.providers && providerKey === (snap.provider || DEFAULT_AI_SETTINGS.provider)) {
     return snap.apiKey || ''
   }
   return ''
