@@ -158,3 +158,32 @@ export const BLIND_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家
 }
 
 要求：严格 JSON、无 markdown、无前后缀文字。blindId 必须是 candidateBlinds 数组中存在的 id。`
+
+// ============== v1.11.0 扩展：AI 托管节奏控制 ==============
+
+// 每次 LLM 决策之间最小间隔（ms）。哪怕 LLM 返回得快，也至少等这么久，
+// 让玩家看清动效与气泡，避免演出过快"看不清"。
+export const AI_PILOT_TICK_DELAY_MS = 600
+
+// 决策环节之间（出完牌 → 等待结算动效 → 下一次决策）的额外等待时间（ms）。
+// 战斗内出完一手后必须等结算动效完整放完才能继续。
+export const AI_PILOT_RESOLVE_WAIT_MS = 2200
+
+// 商店 / 盲注阶段动效较少，等待时间短一些。
+export const AI_PILOT_SHOP_WAIT_MS = 1000
+export const AI_PILOT_BLIND_WAIT_MS = 800
+
+// 同一局允许 LLM 失败多少次。第 1 次失败立即终止整局并 toast。
+export const AI_PILOT_MAX_FAILURES = 1
+
+// 决策日志导出文件版本号（用于将来字段迁移）
+export const PILOT_LOG_VERSION = 1
+
+// 托管模式标识
+export const PILOT_MODES = {
+  SOLO: 'solo',   // 单 AI 托管（默认）
+  DUEL: 'duel'    // 双 AI 对战分屏
+}
+
+// 双 AI 对战时默认的两个供应商
+export const PILOT_DUEL_PROVIDERS = ['anthropic', 'openai']
