@@ -20,6 +20,26 @@ export class AiCoachError extends Error {
   }
 }
 
+// v1.11.1：发布-订阅集合，用于通知外部（App.vue）settings 已变更
+const settingsSubscribers = new Set()
+
+/**
+ * 订阅 settings 变更事件。每当 saveSettings 执行后，所有已注册的回调都会被调用。
+ * @param {Function} callback - 无参回调
+ * @returns {Function} 取消订阅的函数（调用后回调不再触发）
+ */
+export function subscribeSettings(callback) {
+  settingsSubscribers.add(callback)
+  return () => settingsSubscribers.delete(callback)
+}
+
+/** 通知所有订阅者；调用点仅限 saveSettings，统一触发一次 */
+function notifySettingsChange() {
+  settingsSubscribers.forEach(cb => {
+    try { cb() } catch (e) { console.error('[ai-coach] settings subscriber error:', e) }
+  })
+}
+
 const settings = loadSettings()
 
 // 节流字典：4 个场景独立计数
@@ -87,6 +107,8 @@ function saveSettings() {
   try {
     localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(settings))
   } catch (_) { /* ignore */ }
+  // v1.11.1：settings 写入后通知所有订阅者，驱动 App.vue computed 重新计算
+  notifySettingsChange()
 }
 
 export function getSettings() {

@@ -23,7 +23,7 @@ import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
 import AiCoachOverlay from './components/AiCoachOverlay.vue'
 import AiPilotMode from './components/AiPilotMode.vue'
-import { requestDiscardAdvice, requestShopAdvice, requestBlindAdvice, serializePlayState, serializeBlindState, getSettings, hasProviderConfigured } from './utils/ai-coach.js'
+import { requestDiscardAdvice, requestShopAdvice, requestBlindAdvice, serializePlayState, serializeBlindState, getSettings, hasProviderConfigured, subscribeSettings } from './utils/ai-coach.js'
 import { runAutoPilot, AiPilotAbort } from './utils/ai-pilot.js'
 import { createGameActor } from './utils/game-actor.js'
 
@@ -57,6 +57,11 @@ const DIFFICULTY_OPTIONS = [
 const settingsOpen = ref(false)
 function openSettings() { settingsOpen.value = true }
 function closeSettings() { settingsOpen.value = false }
+
+// v1.11.1：settings 响应式版本计数器。
+// subscribeSettings 回调每次触发时自增，使下方 AI computed 自动重新计算。
+const settingsVersion = ref(0)
+let _unsubscribeSettings = null
 
 // 长按 Joker 弹出详情浮窗（移动端取代桌面 hover tooltip 的详细描述）
 const detailJoker = ref(null)
@@ -332,16 +337,21 @@ function providerLabelOf(name) {
 }
 
 /** 当前全局供应商的显示标签 */
-const pilotProviderLabel = computed(() => providerLabelOf(getSettings().provider))
+const pilotProviderLabel = computed(() => {
+  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
+  return providerLabelOf(getSettings().provider)
+})
 
 /** 是否满足启动单人托管的条件 */
 const canStartSoloPilot = computed(() => {
+  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
   const s = getSettings()
   return !!(s.enabled && hasProviderConfigured(s.provider))
 })
 
 /** 不满足时的提示文案 */
 const soloPilotDisabledReason = computed(() => {
+  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
   const s = getSettings()
   if (!s.enabled) return 'AI 未启用，请先到设置中启用'
   if (!hasProviderConfigured(s.provider)) return '当前供应商未配置 API Key'
@@ -353,11 +363,13 @@ const soloPilotDisabledReason = computed(() => {
  * v1.11.0 降级版：仅渲染按钮（始终 disabled），双路 state 机制留 v1.12 实现。
  */
 const canStartDuelPilot = computed(() => {
+  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
   return !!(hasProviderConfigured('anthropic') && hasProviderConfigured('openai'))
 })
 
 /** 双 AI 对战不可用时的提示文案 */
 const duelPilotDisabledReason = computed(() => {
+  settingsVersion.value // v1.11.1：依赖 settingsVersion，settings 变化时自动重算
   if (!hasProviderConfigured('anthropic')) return '需要 Anthropic API Key（设置中配置）'
   if (!hasProviderConfigured('openai')) return '需要 OpenAI API Key（设置中配置）'
   return '双 AI 对战 v1.11.0 仅显示主屏 + 日志（完整双路将于 v1.12 上线）'
@@ -1694,6 +1706,8 @@ onMounted(() => {
   window.addEventListener('keydown', unlockOnFirstInteraction)
   document.addEventListener('pointerdown', delegateButtonSfx)
   document.addEventListener('pointerenter', delegateButtonSfx, true)
+  // v1.11.1：订阅 settings 变更，触发 AI 相关 computed 重新计算
+  _unsubscribeSettings = subscribeSettings(() => { settingsVersion.value++ })
 })
 
 onBeforeUnmount(() => {
@@ -1701,6 +1715,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', unlockOnFirstInteraction)
   document.removeEventListener('pointerdown', delegateButtonSfx)
   document.removeEventListener('pointerenter', delegateButtonSfx, true)
+  // v1.11.1：组件卸载时取消订阅，避免内存泄漏
+  _unsubscribeSettings?.()
+  _unsubscribeSettings = null
 })
 </script>
 
