@@ -53,7 +53,7 @@ export const COACH_THROTTLE_MS = 5000
 // 请求超时：15 秒强制 abort
 export const COACH_REQUEST_TIMEOUT_MS = 15000
 
-// system prompt 模板
+// system prompt 模板（v1.9.0 出牌场景，一字不动）
 export const COACH_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
 规则要点：
 - 玩家从手牌中选 1–5 张组成扑克牌型（高牌/对子/两对/三条/顺子/同花/葫芦/四条/同花顺）。
@@ -76,3 +76,85 @@ export const COACH_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家
   "reasoning": "凑同花触发疯狂小丑 +10 倍率",
   "confidence": 0.86
 }`
+
+// ============== v1.10.0 扩展：场景标识 ==============
+
+export const COACH_SCENES = {
+  PLAY:    'play',     // 战斗中：选哪些牌打出（v1.9.0 原能力）
+  DISCARD: 'discard',  // 战斗中：选哪些牌弃掉
+  SHOP:    'shop',     // 商店中：买/卖/reroll/skip
+  BLIND:   'blind'     // 盲注选择中：选哪个盲注
+}
+
+// 各场景节流独立计数。复用 v1.9.0 的 COACH_THROTTLE_MS 时长。
+export const COACH_SCENE_KEYS = Object.values(COACH_SCENES)
+
+// ============== v1.10.0 扩展：弃牌 system prompt ==============
+
+export const DISCARD_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
+玩家正面临**弃牌决策**：从手牌中选 1–5 张弃掉，换等量新牌。
+
+弃牌建议核心原则：
+- 弃掉那些"无法组合成高分牌型 + 不被任何 Joker 加成"的牌
+- 优先保留：构成对子/三条/同花/顺子潜力的牌、被 Joker 花色 / 点数加成的牌
+- 当 discardsLeft 为 0 时不应建议弃牌（理论上调用方会拦住，但你也要在 reasoning 里指出）
+- 当前 handsLeft 越少，越倾向"保守留住能立即得分的牌型"
+- 部分 boss 盲注的 debuffed=true 的牌**应当优先弃掉**
+
+输出 schema：
+{
+  "action": "discard",
+  "discardCardIds": ["c2","c5"],
+  "reasoning": "弃掉散牌保留同花潜力",
+  "confidence": 0.78
+}
+
+要求：严格 JSON、无 markdown、无前后缀文字。discardCardIds 必须是 hand 中存在的 id 子集，长度 1–5。`
+
+// ============== v1.10.0 扩展：商店 system prompt ==============
+
+export const SHOP_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
+玩家正在**商店**中决策。商店提供以下动作：
+- buy: 购买待售 Joker（targetId 是该 Joker 的 shopJokerId）
+- sell: 卖出已持有 Joker（targetId 是该 Joker 的 ownedJokerId），换钱
+- reroll: 花 $1 刷新整个商店
+- skip: 直接进入下一阶段，不买不卖
+
+判断原则：
+- 评估每张待售 Joker 与玩家现有 jokers + 常打牌型的契合度
+- 关注 build 协同：例如玩家已有"同花 +mult"系，新出"红桃 +chips"会强协同
+- money 紧张时（≤ $4）不建议 reroll
+- ownedJokers 已满（5 张）时建议 sell 一张低性价比的换钱再买
+- 没有真正合适的就大胆 skip，不要乱花钱
+
+输出 schema：
+{
+  "action": "buy" | "sell" | "reroll" | "skip",
+  "targetId": "shopJokerId 或 ownedJokerId（skip / reroll 时为 null）",
+  "reasoning": "本季 build 是同花流，加暴食小丑形成强协同",
+  "confidence": 0.82
+}
+
+要求：严格 JSON、无 markdown、无前后缀文字。buy 时 targetId 必须是 shopJokers 中存在的 id；sell 时 targetId 必须是 ownedJokers 中存在的 id；reroll/skip 时 targetId 为 null。`
+
+// ============== v1.10.0 扩展：盲注选择 system prompt ==============
+
+export const BLIND_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家与教练。
+玩家正在**当前 ante 的盲注选择阶段**：当前 ante 含 3 个盲注（小盲注 / 大盲注 / Boss 盲注），按顺序解锁。
+
+判断原则：
+- 评估玩家当前 build 强度（ownedJokers + money + 上一关表现）vs 各盲注 score 与 Boss 规则
+- Boss 规则会让某些牌型失效或某些牌失去 chips，要重点评估你现有 build 是否会被克
+- 例如 ownedJokers 全是"同花加成"系，遇到 DEBUFF_SPADE Boss 会损失 1/4 的同花潜力
+- 必须从 candidateBlinds 里选一个 blindId（不要自创）
+
+输出 schema：
+{
+  "action": "select",
+  "blindId": "ante2-boss",
+  "riskLevel": "low" | "medium" | "high",
+  "reasoning": "当前 build 抗 face debuff 强，可硬刚 Boss",
+  "confidence": 0.75
+}
+
+要求：严格 JSON、无 markdown、无前后缀文字。blindId 必须是 candidateBlinds 数组中存在的 id。`
