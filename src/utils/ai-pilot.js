@@ -1,5 +1,5 @@
 /**
- * ai-pilot.js — v1.11 AI 托管模式决策状态机
+ * ai-pilot.js — v3.3.0 AI 托管模式决策状态机
  *
  * 导出：
  *   runAutoPilot({ actor, refs, signal, onTick, providerHint })
@@ -137,7 +137,7 @@ function buildBlindPayload(refs) {
 /**
  * 粗略判断当前手牌的最优牌型是否只有高牌，用于决定"先弃牌优化手牌"还是"直接出牌"。
  *
- * 规则（故意简化，v1.11.0 目标是打通流程而非优化 AI 水平）：
+ * 规则（故意简化，v3.3.0 目标是打通流程而非优化 AI 水平）：
  *   - 手牌中有任意同点数对子（或更多） → false（能组成对子以上牌型）
  *   - 手牌中同一花色 >= 5 张 → false（同花潜力）
  *   - 都没有 → 认为目前只能凑高牌，返回 true
@@ -298,7 +298,7 @@ export async function runAutoPilot({ actor, refs, signal, onTick, providerHint =
         await wait(AI_PILOT_SHOP_WAIT_MS, signal)
       }
 
-      // ── pack：v1.11.0 不处理卡包，一律跳过 ─────────────────────────────────
+      // ── pack：v3.3.0 不处理卡包，一律跳过 ─────────────────────────────────
       else if (phase === 'pack') {
         emit({ kind: 'auto', message: '跳过卡包阶段' })
         const r = await actor.skipShop()

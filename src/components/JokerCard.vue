@@ -33,7 +33,7 @@ const props = defineProps({
     default: 'owned' // 'shop' | 'owned'
   },
   /**
-   * v1.10.0：商店建议高亮枚举
+   * v3.2.0：商店建议高亮枚举
    * - 'buy'  → 金色描边 + 脉冲（AI 推荐购买）
    * - 'sell' → 红色描边（AI 推荐卖出）
    * - null   → 无高亮
@@ -1158,7 +1158,7 @@ const artType = computed(() => props.joker?.art || 'jimbo')
   .card-desc { font-size: 8px; }
 }
 
-/* ========== v1.10.0：商店建议推荐高亮 ========== */
+/* ========== v3.2.0：商店建议推荐高亮 ========== */
 
 /* buy：金色描边 + 脉冲动画（AI 推荐购买） */
 .joker-card.is-recommended-buy {

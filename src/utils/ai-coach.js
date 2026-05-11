@@ -20,7 +20,7 @@ export class AiCoachError extends Error {
   }
 }
 
-// v1.11.1：发布-订阅集合，用于通知外部（App.vue）settings 已变更
+// v3.4.0：发布-订阅集合，用于通知外部（App.vue）settings 已变更
 const settingsSubscribers = new Set()
 
 /**
@@ -46,7 +46,7 @@ const settings = loadSettings()
 const lastRequest = Object.fromEntries(COACH_SCENE_KEYS.map(k => [k, { fp: null, at: 0 }]))
 
 /**
- * 从 localStorage 加载设置，并在读取时执行 v1.11.0 的迁移逻辑：
+ * 从 localStorage 加载设置，并在读取时执行 v3.3.0 的迁移逻辑：
  * - 若旧数据只有顶层 `apiKey` 而 `providers` 子树不存在，则把 `apiKey` 复制到
  *   `providers[provider].apiKey`，确保新旧字段同步，不丢失用户已配置的 Key。
  */
@@ -77,7 +77,7 @@ function loadSettings() {
 
       const merged = { ...DEFAULT_AI_SETTINGS, ...parsed, providers: mergedProviders }
 
-      // v1.11.0 迁移：旧用户只有顶层 apiKey，把它复制到当前 provider 的 providers 子树
+      // v3.3.0 迁移：旧用户只有顶层 apiKey，把它复制到当前 provider 的 providers 子树
       // 触发条件：providers[currentProvider].apiKey 为空 但 顶层 apiKey 有值
       const currentProvider = merged.provider || DEFAULT_AI_SETTINGS.provider
       if (merged.apiKey && !mergedProviders[currentProvider]?.apiKey) {
@@ -107,7 +107,7 @@ function saveSettings() {
   try {
     localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(settings))
   } catch (_) { /* ignore */ }
-  // v1.11.1：settings 写入后通知所有订阅者，驱动 App.vue computed 重新计算
+  // v3.4.0：settings 写入后通知所有订阅者，驱动 App.vue computed 重新计算
   notifySettingsChange()
 }
 
@@ -117,11 +117,11 @@ export function getSettings() {
 
 /**
  * 更新全局设置。
- * v1.11.0 扩展：
+ * v3.3.0 扩展：
  * - 若 patch 里包含 `apiKey` 且与原值不同，才同步写入 `providers[currentProvider].apiKey`。
  *   切换 provider 时 SettingsPanel 会重发整个 patch（含 apiKey），此时 apiKey 实际未变，
- *   不应把当前 Key 污染到新 provider 的子树（fix v1.11.2）。
- * - 切换供应商时自动跟随该供应商默认模型（v1.9.0 逻辑保留）。
+ *   不应把当前 Key 污染到新 provider 的子树（fix v3.5.0）。
+ * - 切换供应商时自动跟随该供应商默认模型（v3.0.0 逻辑保留）。
  */
 export function updateSettings(patch) {
   const prevApiKey = settings.apiKey
@@ -140,12 +140,12 @@ export function updateSettings(patch) {
   saveSettings()
 }
 
-// ============== v1.11.0 新增：多供应商 Key 管理工具 ==============
+// ============== v3.3.0 新增：多供应商 Key 管理工具 ==============
 
 /**
  * 解析指定 provider 应使用的 API Key。
  * providers 子树是权威数据源（loadSettings 启动时已迁移旧用户的顶层 apiKey）。
- * fix v1.11.2：去掉顶层 apiKey fallback，避免切 provider 后用错误的 Key 假阳性。
+ * fix v3.5.0：去掉顶层 apiKey fallback，避免切 provider 后用错误的 Key 假阳性。
  *
  * @param {string} providerKey - 供应商标识，如 'anthropic' | 'openai' | 'deepseek'
  * @param {object} [snap=settings] - 可注入一个 settings 快照，用于 per-call 透传
@@ -194,7 +194,7 @@ export function updateProviderApiKey(providerKey, apiKey) {
 
 /**
  * 出牌 / 弃牌场景共用：把游戏状态序列化为 LLM 可消费的最小 payload
- * 字段名遵循 v1.9.0 现有代码（blind.targetScore / lastPlayedHand.name 保持）
+ * 字段名遵循 v3.0.0 现有代码（blind.targetScore / lastPlayedHand.name 保持）
  */
 export function serializePlayState({ hand, ownedJokers, blind, handsLeft, discardsLeft, money, lastPlayedHand, totalScore }) {
   return {
@@ -220,7 +220,7 @@ export function serializePlayState({ hand, ownedJokers, blind, handsLeft, discar
       name: j.name,
       description: j.description
     })),
-    // lastPlayedHand.name 对应现有代码字段（v1.9.0 中 lastPlayedHand 是 hand 识别结果，用 .name）
+    // lastPlayedHand.name 对应现有代码字段（v3.0.0 中 lastPlayedHand 是 hand 识别结果，用 .name）
     lastPlayedHand: lastPlayedHand
       ? {
           handType: lastPlayedHand.name,
@@ -326,7 +326,7 @@ function clampConfidence(v) {
 }
 
 // ============== Payload 构建器（接收 systemPrompt 参数 + settings 快照）==============
-// v1.11.0：所有 builder 接收 snap（settings 快照）而非直接读模块全局 settings，
+// v3.3.0：所有 builder 接收 snap（settings 快照）而非直接读模块全局 settings，
 // 使 per-call provider 透传并发安全（方案 Y：无注入时默认 snap = settings）。
 
 /**
@@ -416,13 +416,13 @@ function buildSettingsSnapshot(providerOverride = null) {
 
 /**
  * 所有场景共用的 LLM fetch 内核。
- * v1.11.0：接收可选 `snap`（settings 快照），实现 per-call provider 透传。
+ * v3.3.0：接收可选 `snap`（settings 快照），实现 per-call provider 透传。
  *   - snap 由 buildSettingsSnapshot(providerOverride) 生成，含 _resolvedApiKey
- *   - 无 snap 时默认使用全局 settings（v1.9.0 / v1.10.0 行为完全等价）
+ *   - 无 snap 时默认使用全局 settings（v3.0.0 / v3.2.0 行为完全等价）
  *
  * @param {string} systemPrompt - 当前场景的 system prompt
  * @param {object} userJsonPayload - 已序列化的游戏状态
- * @param {object} [snap] - settings 快照（可选）；缺省时等价 v1.10.0 行为
+ * @param {object} [snap] - settings 快照（可选）；缺省时等价 v3.2.0 行为
  * @returns {Promise<object>} 已解析的 JSON 对象
  */
 async function callLLM(systemPrompt, userJsonPayload, snap) {
@@ -557,12 +557,12 @@ function validateBlindAdvice(advice, candidateBlinds) {
 
 // ============== 四个对外函数 ==============
 //
-// v1.11.0 方案 Y：每个函数新增可选 `options` 参数（默认 = {}），不破坏 v1.10 签名。
+// v3.3.0 方案 Y：每个函数新增可选 `options` 参数（默认 = {}），不破坏 v3.2.0 签名。
 // options.providerOverride {string|null} — 临时指定供应商（用于双 AI 对战 per-call 透传）。
-// 无 options / options.providerOverride = null 时，行为与 v1.10.0 完全等价。
+// 无 options / options.providerOverride = null 时，行为与 v3.2.0 完全等价。
 
 /**
- * 出牌建议（继承 v1.9.0，重命名）
+ * 出牌建议（继承 v3.0.0，重命名）
  * @param {object} gameState - 游戏状态
  * @param {object} [options={}]
  * @param {string|null} [options.providerOverride] - 临时供应商（null=使用全局设置）
@@ -576,12 +576,12 @@ export async function requestPlayAdvice(gameState, options = {}) {
 }
 
 /**
- * 旧名别名，保持向后兼容——v1.9.0 的 AiCoachOverlay.vue 不需要任何修改
+ * 旧名别名，保持向后兼容——v3.0.0 的 AiCoachOverlay.vue 不需要任何修改
  */
 export const requestCoachAdvice = requestPlayAdvice
 
 /**
- * 弃牌建议（v1.10.0 新增）
+ * 弃牌建议（v3.2.0 新增）
  * @param {object} gameState - 游戏状态
  * @param {object} [options={}]
  * @param {string|null} [options.providerOverride] - 临时供应商
@@ -598,7 +598,7 @@ export async function requestDiscardAdvice(gameState, options = {}) {
 }
 
 /**
- * 商店建议（v1.10.0 新增）
+ * 商店建议（v3.2.0 新增）
  * @param {object} shopState - 商店状态
  * @param {object} [options={}]
  * @param {string|null} [options.providerOverride] - 临时供应商
@@ -612,7 +612,7 @@ export async function requestShopAdvice(shopState, options = {}) {
 }
 
 /**
- * 盲注选择建议（v1.10.0 新增）
+ * 盲注选择建议（v3.2.0 新增）
  * @param {object} blindState - 盲注状态
  * @param {object} [options={}]
  * @param {string|null} [options.providerOverride] - 临时供应商
@@ -629,7 +629,7 @@ export async function requestBlindAdvice(blindState, options = {}) {
 
 /**
  * 向 LLM 供应商发送最小 payload，确认 API Key 与网络可用。
- * v1.11.0：使用 resolveApiKey 读取当前供应商的 Key（新旧字段兼容）。
+ * v3.3.0：使用 resolveApiKey 读取当前供应商的 Key（新旧字段兼容）。
  */
 export async function pingProvider() {
   const provider = AI_PROVIDERS[settings.provider]

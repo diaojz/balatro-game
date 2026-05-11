@@ -1,5 +1,5 @@
 <!-- ======================================================================
-     AiPilotMode.vue  —  AI 托管模式全屏 Overlay（v1.11.0）
+     AiPilotMode.vue  —  AI 托管模式全屏 Overlay（v3.3.0）
      ======================================================================
      职责：
        - 展示 AI 托管状态（进度条 / 思考气泡 / 决策日志 / 中止按钮）
@@ -13,7 +13,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import * as audio from '../utils/audio.js'
 
 // ──────────────────────────────────────────────────────────────────────────
-// Props（v1.11 文档 7.2 锁定）
+// Props（v3.3.0 文档 7.2 锁定）
 // ──────────────────────────────────────────────────────────────────────────
 const props = defineProps({
   /** 是否显示 overlay */
@@ -42,7 +42,7 @@ const props = defineProps({
 })
 
 // ──────────────────────────────────────────────────────────────────────────
-// Emits（v1.11 文档 7.2 锁定）
+// Emits（v3.3.0 文档 7.2 锁定）
 // ──────────────────────────────────────────────────────────────────────────
 const emit = defineEmits(['abort', 'export-log', 'close'])
 
@@ -83,7 +83,7 @@ function onClose() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// 思考气泡文案（v1.11 文档 7.4 + 十 锁定）
+// 思考气泡文案（v3.3.0 文档 7.4 + 十 锁定）
 // ──────────────────────────────────────────────────────────────────────────
 const SCENE_TEXT = {
   play:    'AI 在思考出哪几张牌……',
@@ -98,7 +98,7 @@ function riskLabel(level) {
 }
 
 /**
- * 决策气泡文案（v1.11 文档 7.4 + 文案锁定）
+ * 决策气泡文案（v3.3.0 文档 7.4 + 文案锁定）
  * @param {object} entry - 日志条目，kind==='decided' 时调用
  */
 function decidedText(entry) {
@@ -289,7 +289,7 @@ watch(
            ──────────────────────────────────────────────────────────────── -->
       <section class="ai-pilot-thinking" :class="{ 'is-duel': mode === 'duel' }">
 
-        <!-- A 侧气泡（ThinkingBubble，v1.11 文档 7.4 锁定结构） -->
+        <!-- A 侧气泡（ThinkingBubble，v3.3.0 文档 7.4 锁定结构） -->
         <div class="thinking-bubble" :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }">
           <div class="thinking-orb-wrap">
             <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
@@ -373,7 +373,7 @@ watch(
       </footer>
 
       <!-- ────────────────────────────────────────────────────────────────
-           中止确认弹窗（v1.11 文档文案锁定）
+           中止确认弹窗（v3.3.0 文档文案锁定）
            ──────────────────────────────────────────────────────────────── -->
       <Transition name="modal">
         <div
@@ -796,7 +796,7 @@ watch(
   white-space: nowrap;
 }
 
-/* ── 日志条颜色（v1.11 文档 7.5 锁定） ── */
+/* ── 日志条颜色（v3.3.0 文档 7.5 锁定） ── */
 /* start: 紫色 */
 .log-kind-start .log-kind-label,
 .log-kind-start .log-detail {
