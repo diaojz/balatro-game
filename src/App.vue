@@ -133,8 +133,46 @@ if (import.meta.env.DEV) {
   window.__test_requestDiscardAdvice = requestDiscardAdviceNow
 }
 
-function onAiRecommend(ids) { aiRecommendedCardIds.value = ids }
-function onAiClear()        { aiRecommendedCardIds.value = [] }
+/**
+ * v1.10.0 A7：onAiRecommend 重写为 4 路分发
+ * AiCoachOverlay 现在 emit 整个 advice 对象（不再是 ids 数组）
+ * @param {Object} advice - 整个 advice 对象，含 scene 字段
+ */
+function onAiRecommend(advice) {
+  if (!advice || !advice.scene) return
+  switch (advice.scene) {
+    case 'play':
+      // 出牌建议：高亮 recommendedCardIds
+      aiRecommendedCardIds.value = advice.recommendedCardIds || []
+      aiDiscardRecommendedIds.value = []
+      break
+    case 'discard':
+      // 弃牌建议：高亮 discardCardIds，自动切入弃牌模式
+      aiDiscardRecommendedIds.value = advice.discardCardIds || []
+      aiRecommendedCardIds.value = []
+      isDiscardMode.value = true
+      break
+    case 'shop':
+      // 商店建议：整个 advice 存入 aiShopAdvice，由 shopRecommendedKindOf 计算高亮
+      aiShopAdvice.value = advice
+      break
+    case 'blind':
+      // 盲注建议：整个 advice 存入 aiBlindAdvice，由 blindRecommendedKindOf 计算高亮
+      aiBlindAdvice.value = advice
+      break
+  }
+}
+
+/**
+ * v1.10.0 A7：onAiClear 清空所有 4 路 advice
+ */
+function onAiClear() {
+  aiRecommendedCardIds.value = []
+  aiDiscardRecommendedIds.value = []
+  aiShopAdvice.value = null
+  aiBlindAdvice.value = null
+}
+
 function onAiToast(payload) {
   showToastMessage(payload.text, payload.type === 'warn' ? 'warning' : 'info')
 }
@@ -171,6 +209,69 @@ const shopJokersWithIds = computed(() =>
 const ownedJokersWithIds = computed(() =>
   ownedJokers.value.map((j, i) => ({ ...j, ownedJokerId: `oj_${i}` }))
 )
+
+// ========== v1.10.0 A7：scene-aware 水晶球 computed ==========
+
+/**
+ * 当前应向 AiCoachOverlay 传递的 scene 字符串
+ * - battle + 弃牌模式 → 'discard'
+ * - battle + 出牌模式 → 'play'
+ * - shop → 'shop'
+ * - blind-select → 'blind'
+ * - 其他 → null（Overlay 隐藏）
+ */
+const aiScene = computed(() => {
+  if (runPhase.value === RUN_PHASES.BATTLE) return isDiscardMode.value ? 'discard' : 'play'
+  if (runPhase.value === RUN_PHASES.SHOP) return 'shop'
+  if (runPhase.value === RUN_PHASES.BLIND_SELECT) return 'blind'
+  return null
+})
+
+/**
+ * 是否显示 AiCoachOverlay（由 aiScene 驱动）
+ */
+const aiVisible = computed(() => aiScene.value !== null)
+
+/**
+ * 按 aiScene 组装对应 payload 传给 AiCoachOverlay
+ * Overlay 内部会把 payload 传给对应的 request*Advice 函数
+ */
+const aiPayload = computed(() => {
+  if (!aiScene.value) return null
+  if (aiScene.value === 'play' || aiScene.value === 'discard') {
+    return {
+      hand: hand.value,
+      ownedJokers: ownedJokers.value,
+      blind: blind.value,
+      handsLeft: handsLeft.value,
+      discardsLeft: discardsLeft.value,
+      money: money.value,
+      lastPlayedHand: lastPlayedHand.value,
+      totalScore: totalScore.value
+    }
+  }
+  if (aiScene.value === 'shop') {
+    return {
+      shopJokers: shopJokersWithIds.value,
+      ownedJokers: ownedJokersWithIds.value,
+      money: money.value,
+      currentAnte: currentAnte.value,
+      blind: blind.value,
+      lastPlayedHand: lastPlayedHand.value
+    }
+  }
+  if (aiScene.value === 'blind') {
+    return {
+      candidateBlinds: availableBlindOptions.value,
+      ownedJokers: ownedJokers.value,
+      money: money.value,
+      currentAnte: currentAnte.value,
+      totalScore: totalScore.value,
+      lastPlayedHand: lastPlayedHand.value
+    }
+  }
+  return null
+})
 
 /**
  * 根据 aiShopAdvice 推断某个 Joker 的推荐类型
@@ -1343,12 +1444,10 @@ watch(runPhase, (next) => {
     audio.playBgm(gameWon.value ? 'win' : 'lose')
     return
   }
-  // 离开战斗阶段时清空出牌 AI 推荐
-  if (next !== RUN_PHASES.BATTLE) onAiClear()
-  // v1.10.0 A4：离开商店阶段时清空商店 AI 建议高亮
-  if (next !== RUN_PHASES.SHOP) aiShopAdvice.value = null
-  // v1.10.0 A5：离开盲注选择阶段时清空盲注 AI 建议高亮
-  if (next !== RUN_PHASES.BLIND_SELECT) aiBlindAdvice.value = null
+  // v1.10.0 A7：阶段切换时统一清空所有 4 路 AI 建议（onAiClear 内部清空全部）
+  onAiClear()
+  // 退出 battle 时重置弃牌模式
+  if (next !== RUN_PHASES.BATTLE) isDiscardMode.value = false
   const track = PHASE_TO_BGM[next]
   audio.playBgm(track)
 }, { immediate: false })
@@ -1580,6 +1679,15 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="bottom-bar">
+            <!-- v1.10.0 A7：盲注阶段水晶球 -->
+            <AiCoachOverlay
+              :visible="aiVisible && isBlindSelectPhase"
+              :scene="aiScene"
+              :payload="aiPayload"
+              @recommend="onAiRecommend"
+              @clear="onAiClear"
+              @toast="onAiToast"
+            />
             <button
               v-for="blindOption in availableBlindOptions.filter(b => b.isRecommended && b.canChallenge)"
               :key="'btn-' + blindOption.id"
@@ -1608,6 +1716,15 @@ onBeforeUnmount(() => {
               >
                 刷新 · $1
               </button>
+              <!-- v1.10.0 A7：商店阶段水晶球 -->
+              <AiCoachOverlay
+                :visible="aiVisible && isShopPhase"
+                :scene="aiScene"
+                :payload="aiPayload"
+                @recommend="onAiRecommend"
+                @clear="onAiClear"
+                @toast="onAiToast"
+              />
             </div>
           </div>
 
@@ -1781,20 +1898,23 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- AI 教练 + 设置（战斗阶段 HUD 顶部右侧） -->
+        <!-- AI 教练 + 弃牌模式切换 + 设置（战斗阶段 HUD 顶部右侧） -->
         <div class="hud-top-right">
+          <!-- 弃牌模式开关：出牌 ↔ 弃牌 -->
+          <button
+            class="discard-mode-btn"
+            :class="{ 'is-discard-mode': isDiscardMode }"
+            :title="isDiscardMode ? '切换到出牌模式' : '切换到弃牌模式'"
+            data-no-sfx="true"
+            @click="toggleDiscardMode"
+          >
+            {{ isDiscardMode ? '出' : '弃' }}
+          </button>
+          <!-- v1.10.0 A7：battle 阶段统一用 scene-aware AiCoachOverlay -->
           <AiCoachOverlay
-            :visible="isBattlePhase"
-            :game-state="{
-              hand,
-              ownedJokers,
-              blind,
-              handsLeft,
-              discardsLeft,
-              money,
-              lastPlayedHand,
-              totalScore
-            }"
+            :visible="aiVisible && isBattlePhase"
+            :scene="aiScene"
+            :payload="aiPayload"
             @recommend="onAiRecommend"
             @clear="onAiClear"
             @toast="onAiToast"
@@ -3223,5 +3343,33 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 0 6px;
+}
+
+/* v1.10.0 A7：弃牌模式切换按钮 */
+.discard-mode-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--gold, #ffd166);
+  background: radial-gradient(circle at 35% 30%, #2d1f55, #1a1330 80%);
+  color: var(--gold, #ffd166);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 8px 1px rgba(255, 209, 102, .35);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.discard-mode-btn:hover {
+  box-shadow: 0 0 14px 3px rgba(255, 209, 102, .65);
+}
+.discard-mode-btn.is-discard-mode {
+  border-color: var(--danger, #e34b6f);
+  color: var(--danger, #e34b6f);
+  box-shadow: 0 0 8px 1px rgba(227, 75, 111, .45);
+}
+.discard-mode-btn.is-discard-mode:hover {
+  box-shadow: 0 0 14px 3px rgba(227, 75, 111, .8);
 }
 </style>

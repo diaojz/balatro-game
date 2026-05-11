@@ -1,12 +1,20 @@
 <script setup>
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import gsap from 'gsap'
 import * as ai from '../utils/ai-coach.js'
 import * as audio from '../utils/audio.js'
 
 const props = defineProps({
-  gameState: { type: Object, required: true },
-  visible:   { type: Boolean, default: true }
+  // v1.9.0 已有：是否显示水晶球
+  visible: { type: Boolean, default: true },
+  // v1.10.0 扩展：当前决策场景
+  scene:   {
+    type: String,
+    default: 'play',
+    validator: v => ['play', 'discard', 'shop', 'blind'].includes(v)
+  },
+  // v1.10.0 扩展：scene 对应的原始 payload（由父组件按 scene 准备）
+  payload: { type: Object, default: null }
 })
 const emit = defineEmits(['recommend', 'clear', 'toast'])
 
@@ -36,6 +44,14 @@ watch(() => props.visible, (v) => {
   }
 }, { immediate: true })
 
+// scene 切换时重置状态，避免上一场景的建议残留在气泡里
+watch(() => props.scene, () => {
+  advice.value = null
+  bubbleVisible.value = false
+  clearTimeout(bubbleTimer)
+  status.value = 'idle'
+})
+
 function startThinking() {
   status.value = 'thinking'
   if (particleRef.value) {
@@ -63,11 +79,24 @@ async function ask() {
     return
   }
   if (status.value === 'thinking') return
+  if (!props.payload) {
+    emit('toast', { type: 'warn', text: 'AI 当前场景未知' })
+    return
+  }
   startThinking()
   try {
-    const result = await ai.requestCoachAdvice(props.gameState)
+    let result
+    if (props.scene === 'play')         result = await ai.requestPlayAdvice(props.payload)
+    else if (props.scene === 'discard') result = await ai.requestDiscardAdvice(props.payload)
+    else if (props.scene === 'shop')    result = await ai.requestShopAdvice(props.payload)
+    else if (props.scene === 'blind')   result = await ai.requestBlindAdvice(props.payload)
+    else {
+      emit('toast', { type: 'warn', text: 'AI 当前场景未知' })
+      return
+    }
     advice.value = result
-    emit('recommend', result.recommendedCardIds)
+    // v1.10.0：emit 整个 advice 对象，父组件按 scene 决定高亮逻辑
+    emit('recommend', result)
     audio.playSfx('aiPing')
     status.value = 'done'
     showBubble()
@@ -100,17 +129,83 @@ function flashError() {
 
 function errorTextOf(e) {
   const map = {
-    disabled:         'AI 教练未启用',
-    no_api_key:       '请在设置中填入 API Key',
-    throttled:        e.detail || '请稍候再试',
-    timeout:          'AI 思考超时，请重试',
-    network:          '网络异常，无法连接 AI',
-    http_error:       `AI 拒绝请求：${e.detail}`,
-    empty_response:   'AI 没有返回内容',
-    invalid_response: 'AI 返回了不可解析的结果',
-    unknown_provider: '未知供应商'
+    disabled:          'AI 教练未启用',
+    no_api_key:        '请在设置中填入 API Key',
+    throttled:         e.detail || '请稍候再试',
+    timeout:           'AI 思考超时，请重试',
+    network:           '网络异常，无法连接 AI',
+    http_error:        `AI 拒绝请求：${e.detail}`,
+    empty_response:    'AI 没有返回内容',
+    invalid_response:  'AI 返回了不可解析的结果',
+    unknown_provider:  '未知供应商',
+    unknown_scene:     'AI 当前场景未知',
+    no_discards_left:  '本回合已无弃牌次数'
   }
   return map[e.reason] || `AI 暂时不可用（${e.reason}）`
+}
+
+// ============================================================
+// 气泡文案：按 scene 渲染标题与正文
+// ============================================================
+
+/** 场景 tag 文字与颜色 */
+const bubbleTag = computed(() => {
+  const tags = {
+    play:    { text: 'AI 推荐', color: '#ffd166' },
+    discard: { text: 'AI 弃牌', color: '#e34b6f' },
+    shop:    { text: 'AI 商店', color: '#a78bfa' },
+    blind:   { text: 'AI 盲注', color: '#60a5fa' }
+  }
+  return tags[props.scene] ?? tags.play
+})
+
+/** 气泡标题：按 scene + action 组合 */
+const bubbleTitle = computed(() => {
+  if (!advice.value) return ''
+  const a = advice.value
+  if (a.scene === 'play') {
+    return a.handType || '出牌推荐'
+  }
+  if (a.scene === 'discard') {
+    const n = a.discardCardIds?.length ?? 0
+    return `弃 ${n} 张`
+  }
+  if (a.scene === 'shop') {
+    const actionMap = {
+      buy:    `购买：${resolveShopJokerName(a.targetId)}`,
+      sell:   `卖出：${resolveOwnedJokerName(a.targetId)}`,
+      reroll: '刷新商店',
+      skip:   '跳过商店'
+    }
+    return actionMap[a.action] ?? a.action
+  }
+  if (a.scene === 'blind') {
+    const name = resolveBlindName(a.blindId)
+    const riskCN = { low: '低', medium: '中', high: '高' }[a.riskLevel] ?? '未知'
+    return `选 ${name} · 风险 ${riskCN}`
+  }
+  return ''
+})
+
+/** 从 payload 中找商店 Joker 名称（buy 时） */
+function resolveShopJokerName(targetId) {
+  if (!props.payload?.shopJokers) return targetId ?? ''
+  const j = props.payload.shopJokers.find(x => x.shopJokerId === targetId)
+  return j?.name ?? targetId ?? ''
+}
+
+/** 从 payload 中找已拥有 Joker 名称（sell 时） */
+function resolveOwnedJokerName(targetId) {
+  if (!props.payload?.ownedJokers) return targetId ?? ''
+  const j = props.payload.ownedJokers.find(x => x.ownedJokerId === targetId)
+  return j?.name ?? targetId ?? ''
+}
+
+/** 从 payload 中找盲注名称 */
+function resolveBlindName(blindId) {
+  if (!props.payload?.candidateBlinds) return blindId ?? ''
+  const b = props.payload.candidateBlinds.find(x => x.id === blindId)
+  return b?.name ?? blindId ?? ''
 }
 
 onUnmounted(() => {
@@ -125,7 +220,13 @@ onUnmounted(() => {
     <button
       ref="orbRef"
       class="ai-orb"
-      :class="{ 'is-thinking': status === 'thinking', 'is-disabled': !enabled }"
+      :class="{
+        'is-thinking': status === 'thinking',
+        'is-disabled': !enabled,
+        'scene-discard': scene === 'discard',
+        'scene-shop':    scene === 'shop',
+        'scene-blind':   scene === 'blind'
+      }"
       data-no-sfx="true"
       :title="enabled ? '请教 AI 教练' : '点设置启用 AI 教练'"
       @click="ask"
@@ -137,10 +238,13 @@ onUnmounted(() => {
     </button>
 
     <Transition name="bubble">
-      <div v-if="bubbleVisible && advice" class="ai-bubble">
+      <div v-if="bubbleVisible && advice" class="ai-bubble" :class="`scene-${scene}`">
         <div class="ai-bubble-head">
-          <span class="ai-bubble-tag">AI 推荐</span>
-          <span class="ai-bubble-handtype">{{ advice.handType }}</span>
+          <span
+            class="ai-bubble-tag"
+            :style="{ background: bubbleTag.color, color: scene === 'play' ? '#1a1330' : '#fff' }"
+          >{{ bubbleTag.text }}</span>
+          <span class="ai-bubble-handtype">{{ bubbleTitle }}</span>
           <button class="ai-bubble-close" data-no-sfx="true" @click="closeBubble">×</button>
         </div>
         <p class="ai-bubble-text">{{ advice.reasoning }}</p>
@@ -204,6 +308,45 @@ onUnmounted(() => {
 @keyframes orb-breath {
   0%, 100% { box-shadow: 0 0 12px 2px rgba(108, 92, 231, .55); }
   50%      { box-shadow: 0 0 20px 6px rgba(108, 92, 231, .85); }
+}
+
+/* 弃牌模式：红色光晕 */
+.ai-orb.scene-discard {
+  border-color: var(--danger, #e34b6f);
+  animation: orb-breath-discard 3.2s ease-in-out infinite;
+}
+.ai-orb.scene-discard.is-thinking {
+  animation: orb-breath-discard 0.8s ease-in-out infinite;
+}
+@keyframes orb-breath-discard {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(227, 75, 111, .55); }
+  50%      { box-shadow: 0 0 20px 6px rgba(227, 75, 111, .85); }
+}
+
+/* 商店模式：紫色光晕 */
+.ai-orb.scene-shop {
+  border-color: #a78bfa;
+  animation: orb-breath-shop 3.2s ease-in-out infinite;
+}
+.ai-orb.scene-shop.is-thinking {
+  animation: orb-breath-shop 0.8s ease-in-out infinite;
+}
+@keyframes orb-breath-shop {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(167, 139, 250, .55); }
+  50%      { box-shadow: 0 0 20px 6px rgba(167, 139, 250, .85); }
+}
+
+/* 盲注模式：蓝色光晕 */
+.ai-orb.scene-blind {
+  border-color: #60a5fa;
+  animation: orb-breath-blind 3.2s ease-in-out infinite;
+}
+.ai-orb.scene-blind.is-thinking {
+  animation: orb-breath-blind 0.8s ease-in-out infinite;
+}
+@keyframes orb-breath-blind {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(96, 165, 250, .55); }
+  50%      { box-shadow: 0 0 20px 6px rgba(96, 165, 250, .85); }
 }
 
 .ai-bubble {
