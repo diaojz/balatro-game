@@ -349,6 +349,21 @@ const soloPilotDisabledReason = computed(() => {
 })
 
 /**
+ * 双 AI 对战是否可启动：需要 Anthropic + OpenAI 两个 Key 都配置。
+ * v1.11.0 降级版：仅渲染按钮（始终 disabled），双路 state 机制留 v1.12 实现。
+ */
+const canStartDuelPilot = computed(() => {
+  return !!(hasProviderConfigured('anthropic') && hasProviderConfigured('openai'))
+})
+
+/** 双 AI 对战不可用时的提示文案 */
+const duelPilotDisabledReason = computed(() => {
+  if (!hasProviderConfigured('anthropic')) return '需要 Anthropic API Key（设置中配置）'
+  if (!hasProviderConfigured('openai')) return '需要 OpenAI API Key（设置中配置）'
+  return '双 AI 对战 v1.11.0 仅显示主屏 + 日志（完整双路将于 v1.12 上线）'
+})
+
+/**
  * 向 pilotLog 追加一条事件
  * @param {string} side  - 'A'（主 AI）或 'B'（对战 AI）
  * @param {object} event - 任意事件对象，at 字段若缺失则自动填充
@@ -1851,6 +1866,14 @@ onBeforeUnmount(() => {
             >
               🔮 AI 托管模式
             </button>
+            <!-- v1.11.0 B7：双 AI 对战入口（v1.11 降级版：按钮存在，完整双路留 v1.12） -->
+            <button
+              class="btn-ai-duel"
+              :disabled="true"
+              :title="duelPilotDisabledReason"
+            >
+              ⚔️ 双 AI 对战
+            </button>
           </div>
         </div>
       </div>
@@ -2533,6 +2556,28 @@ onBeforeUnmount(() => {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
+}
+
+/* v1.11.0 B7：双 AI 对战入口按钮（同色系，略小一档） */
+.btn-ai-duel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px 20px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  border-radius: 12px;
+  border: 2px solid rgba(179, 136, 255, 0.25);
+  background: linear-gradient(180deg, #5b21b6, #3b0764);
+  color: #e9d5ff;
+  box-shadow: 0 3px 0 rgba(0,0,0,.4);
+  cursor: not-allowed;
+  opacity: 0.5;
+  user-select: none;
 }
 
 .btn-ghost,
