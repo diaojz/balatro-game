@@ -22,7 +22,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
 import AiCoachOverlay from './components/AiCoachOverlay.vue'
-import { requestShopAdvice, requestBlindAdvice, serializeBlindState } from './utils/ai-coach.js'
+import { requestDiscardAdvice, requestShopAdvice, requestBlindAdvice, serializePlayState, serializeBlindState } from './utils/ai-coach.js'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -76,6 +76,62 @@ const aiDiscardRecommendedIds = ref([])
  * targetId: shopJokerId / ownedJokerId（reroll/skip 时为 null）
  */
 const aiShopAdvice = ref(null)
+
+// v1.10.0 A6：弃牌模式开关。true = 当前处于弃牌建议场景，PlayingCard 红色高亮由 aiDiscardRecommendedIds 驱动
+const isDiscardMode = ref(false)
+
+/**
+ * 切换弃牌模式。
+ * 进入时清空出牌推荐高亮，离开时清空弃牌推荐高亮。
+ * UI 入口留给 A7 AiCoachOverlay scene='discard' 分支调用。
+ */
+function toggleDiscardMode() {
+  if (isDiscardMode.value) {
+    // 退出弃牌模式：清空弃牌推荐
+    isDiscardMode.value = false
+    aiDiscardRecommendedIds.value = []
+  } else {
+    // 进入弃牌模式：清空出牌推荐，避免两种高亮同时显示
+    isDiscardMode.value = true
+    aiRecommendedCardIds.value = []
+  }
+}
+
+/**
+ * 触发弃牌 AI 建议。
+ * - 前端先拦 discardsLeft <= 0，避免无谓 LLM 调用
+ * - ai-coach.js requestDiscardAdvice 内部同样检查（双重兜底）
+ * - 成功后填充 aiDiscardRecommendedIds，PlayingCard 红色脉冲自动生效
+ * - 失败时静默 console.error，不污染 UI
+ * A7 整合 AiCoachOverlay 时，由 scene='discard' 分支调用此函数。
+ */
+async function requestDiscardAdviceNow() {
+  if (discardsLeft.value <= 0) {
+    showToastMessage('本回合已无弃牌次数', 'warning')
+    return
+  }
+  try {
+    const result = await requestDiscardAdvice({
+      hand: hand.value,
+      ownedJokers: ownedJokers.value,
+      blind: blind.value,
+      handsLeft: handsLeft.value,
+      discardsLeft: discardsLeft.value,
+      money: money.value,
+      lastPlayedHand: lastPlayedHand.value,
+      totalScore: totalScore.value
+    })
+    aiDiscardRecommendedIds.value = result.discardCardIds
+  } catch (e) {
+    console.error('[AI Discard Advice] 失败：', e?.reason ?? e?.message ?? e)
+    // 不污染 UI：catch 吞掉，aiDiscardRecommendedIds 保持不变
+  }
+}
+
+// dev 环境：暴露到 window，供浏览器 console 手工调用验证
+if (import.meta.env.DEV) {
+  window.__test_requestDiscardAdvice = requestDiscardAdviceNow
+}
 
 function onAiRecommend(ids) { aiRecommendedCardIds.value = ids }
 function onAiClear()        { aiRecommendedCardIds.value = [] }
@@ -581,6 +637,9 @@ function selectBlind(blindId) {
 
   // v1.10.0 A5：点击选择盲注后立即清空 AI 盲注推荐高亮
   aiBlindAdvice.value = null
+  // v1.10.0 A6：进入 battle 时清空弃牌推荐高亮 + 弃牌模式
+  aiDiscardRecommendedIds.value = []
+  isDiscardMode.value = false
 
   // 进入 boss 之前冻结 most-played handType，供 The Ox 使用
   if (targetBlind.bossRule?.key === 'MOST_HAND_PENALTY') {
@@ -1050,6 +1109,9 @@ async function playHand() {
 function discardCards() {
   if (isResolvingHand.value) return
   onAiClear()
+  // v1.10.0 A6：实际弃牌时同步清空弃牌推荐高亮 + 退出弃牌模式
+  aiDiscardRecommendedIds.value = []
+  isDiscardMode.value = false
   const selected = selectedCards.value
 
   if (selected.length === 0) {
