@@ -22,6 +22,7 @@ import SettingsPanel from './components/SettingsPanel.vue'
 import OrientationGuard from './components/OrientationGuard.vue'
 import JokerDetailPopover from './components/JokerDetailPopover.vue'
 import AiCoachOverlay from './components/AiCoachOverlay.vue'
+import { requestShopAdvice } from './utils/ai-coach.js'
 
 const RUN_PHASES = {
   SETUP: 'setup',
@@ -68,6 +69,14 @@ const aiRecommendedCardIds = ref([])
 // v1.10.0：弃牌推荐 ids 占位，A6 接入弃牌 AI 时正式赋值
 const aiDiscardRecommendedIds = ref([])
 
+/**
+ * v1.10.0 A4：商店建议对象
+ * 结构同 validateShopAdvice 返回值：{ scene, action, targetId, reasoning, confidence }
+ * action: 'buy' | 'sell' | 'reroll' | 'skip'
+ * targetId: shopJokerId / ownedJokerId（reroll/skip 时为 null）
+ */
+const aiShopAdvice = ref(null)
+
 function onAiRecommend(ids) { aiRecommendedCardIds.value = ids }
 function onAiClear()        { aiRecommendedCardIds.value = [] }
 function onAiToast(payload) {
@@ -87,6 +96,73 @@ function recommendedKindOf(cardId) {
   if (aiDiscardRecommendedIds.value.includes(cardId)) return 'discard'
   if (aiRecommendedCardIds.value.includes(cardId)) return 'play'
   return null
+}
+
+// ========== v1.10.0 A4：商店建议数据流 ==========
+
+/**
+ * 商店区 Joker 加稳定 shopJokerId（格式：sh_0、sh_1、sh_2）
+ * 用于 serializeShopState / AI 建议 targetId 匹配
+ */
+const shopJokersWithIds = computed(() =>
+  shopJokers.value.map((j, i) => ({ ...j, shopJokerId: `sh_${i}` }))
+)
+
+/**
+ * 已拥有 Joker 加稳定 ownedJokerId（格式：oj_0 … oj_4）
+ * 用于 serializeShopState / AI 建议 targetId 匹配
+ */
+const ownedJokersWithIds = computed(() =>
+  ownedJokers.value.map((j, i) => ({ ...j, ownedJokerId: `oj_${i}` }))
+)
+
+/**
+ * 根据 aiShopAdvice 推断某个 Joker 的推荐类型
+ * - action === 'buy' && targetId === joker.shopJokerId → 'buy'（金色）
+ * - action === 'sell' && targetId === joker.ownedJokerId → 'sell'（红色）
+ * - action === 'reroll' / 'skip'：不针对具体 Joker，全部返回 null；气泡文案由 Overlay 显示
+ * @param {string} jokerId - shopJokerId 或 ownedJokerId
+ * @returns {'buy' | 'sell' | null}
+ */
+function shopRecommendedKindOf(jokerId) {
+  if (!aiShopAdvice.value) return null
+  const { action, targetId } = aiShopAdvice.value
+  if (action === 'buy' && targetId === jokerId) return 'buy'
+  if (action === 'sell' && targetId === jokerId) return 'sell'
+  return null
+}
+
+/**
+ * 触发商店 AI 建议（A7 将把调用权交给 AiCoachOverlay；
+ * 本步暴露此函数，A7 可通过 ref 或 provide/inject 直接调用）
+ * 调用时机：runPhase === 'shop' 下点击水晶球
+ */
+/**
+ * 商店阶段 AI 建议触发入口
+ * A7 将把调用权转交 AiCoachOverlay（scene='shop' 分支），届时此函数仍可作为 fallback。
+ * 当前本步暂不接任何 UI 入口，等 A7 统一整合 Overlay 后调用。
+ */
+async function requestShopAdviceNow() {
+  if (runPhase.value !== RUN_PHASES.SHOP) return
+  try {
+    const result = await requestShopAdvice({
+      shopJokers: shopJokersWithIds.value,
+      ownedJokers: ownedJokersWithIds.value,
+      money: money.value,
+      currentAnte: currentAnte.value,
+      blind: blind.value,
+      lastPlayedHand: lastPlayedHand.value
+    })
+    aiShopAdvice.value = result
+    // 调试：验证商店气泡数据结构（A7 接通 Overlay 后移除）
+    console.log('[AI Shop Advice]', result)
+  } catch (e) {
+    aiShopAdvice.value = null
+    showToastMessage(
+      e?.reason === 'invalid_response' ? 'AI 返回了不可解析的结果' : `AI 建议失败：${e?.detail ?? e?.message ?? e}`,
+      'warning'
+    )
+  }
 }
 
 const deck = ref([])
@@ -285,7 +361,8 @@ const shopRefreshState = computed(() => {
   }
 })
 const shopOfferStates = computed(() =>
-  shopJokers.value.map(joker => {
+  // v1.10.0 A4：加入 shopJokerId 以供 shopRecommendedKindOf 使用
+  shopJokers.value.map((joker, i) => {
     const canAfford = money.value >= joker.price
     const hasSlot = ownedJokers.value.length < maxJokers
     let status = 'available'
@@ -304,6 +381,7 @@ const shopOfferStates = computed(() =>
 
     return {
       ...joker,
+      shopJokerId: `sh_${i}`,
       canAfford,
       hasSlot,
       canBuy: canAfford && hasSlot,
@@ -1000,6 +1078,8 @@ function rerollShop() {
     return
   }
 
+  // v1.10.0 A4：刷新商店时清空 AI 建议高亮
+  aiShopAdvice.value = null
   money.value -= 1
   audio.playSfx('shopReroll')
   openShop()
@@ -1007,6 +1087,8 @@ function rerollShop() {
 }
 
 function closeShop() {
+  // v1.10.0 A4：跳过商店时清空 AI 建议高亮
+  aiShopAdvice.value = null
   const nextBlindIndex = currentBlind.value + 1
   const nextBlind = BLINDS[nextBlindIndex]
 
@@ -1033,6 +1115,8 @@ function buyJoker(joker) {
     return
   }
 
+  // v1.10.0 A4：购买后清空 AI 建议高亮
+  aiShopAdvice.value = null
   money.value -= joker.price
   ownedJokers.value.push({ ...joker })
   shopJokers.value = shopJokers.value.filter(item => item.id !== joker.id)
@@ -1041,6 +1125,8 @@ function buyJoker(joker) {
 }
 
 function sellJoker(joker) {
+  // v1.10.0 A4：卖出后清空 AI 建议高亮
+  aiShopAdvice.value = null
   const sellPrice = Math.floor(joker.price / 2)
   money.value += sellPrice
   ownedJokers.value = ownedJokers.value.filter(item => item !== joker)
@@ -1127,8 +1213,10 @@ watch(runPhase, (next) => {
     audio.playBgm(gameWon.value ? 'win' : 'lose')
     return
   }
-  // 离开战斗阶段时清空 AI 推荐
+  // 离开战斗阶段时清空出牌 AI 推荐
   if (next !== RUN_PHASES.BATTLE) onAiClear()
+  // v1.10.0 A4：离开商店阶段时清空商店 AI 建议高亮
+  if (next !== RUN_PHASES.SHOP) aiShopAdvice.value = null
   const track = PHASE_TO_BGM[next]
   audio.playBgm(track)
 }, { immediate: false })
@@ -1400,12 +1488,14 @@ onBeforeUnmount(() => {
                 :class="{ unavailable: !joker.canBuy }"
               >
                 <div class="shop-item-art-wrap">
+                  <!-- v1.10.0 A4：接入商店建议高亮（buy） -->
                   <JokerCard
                     :joker="joker"
                     size="shop"
                     :show-tooltip="false"
                     :shimmering="shimmeringJokerIds.includes(joker.id)"
                     context="shop"
+                    :recommended="shopRecommendedKindOf(joker.shopJokerId)"
                     @longpress="showJokerDetail"
                   />
                 </div>
@@ -1427,12 +1517,14 @@ onBeforeUnmount(() => {
           <div class="shop-owned">
             <p class="shop-section-label">已拥有 · {{ ownedJokers.length }} / {{ maxJokers }}（点击卡片可出售）</p>
             <div class="shop-owned-row">
+              <!-- v1.10.0 A4：接入商店建议高亮（sell），用 ownedJokersWithIds 提供稳定 ownedJokerId -->
               <JokerCard
-                v-for="joker in ownedJokers"
+                v-for="(joker, idx) in ownedJokersWithIds"
                 :key="joker.id"
                 :joker="joker"
                 size="normal"
                 context="owned"
+                :recommended="shopRecommendedKindOf(joker.ownedJokerId)"
                 @click="requestSellJoker(joker)"
                 @longpress="showJokerDetail"
               />

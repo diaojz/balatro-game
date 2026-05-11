@@ -31,6 +31,17 @@ const props = defineProps({
   context: {
     type: String,
     default: 'owned' // 'shop' | 'owned'
+  },
+  /**
+   * v1.10.0：商店建议高亮枚举
+   * - 'buy'  → 金色描边 + 脉冲（AI 推荐购买）
+   * - 'sell' → 红色描边（AI 推荐卖出）
+   * - null   → 无高亮
+   */
+  recommended: {
+    type: String,
+    default: null,
+    validator: (v) => v === null || v === 'buy' || v === 'sell'
   }
 })
 
@@ -65,7 +76,7 @@ const artType = computed(() => props.joker?.art || 'jimbo')
   <div
     v-else
     class="joker-card"
-    :class="[`size-${size}`, `rarity-${joker.rarity}`, { triggering, shimmering }]"
+    :class="[`size-${size}`, `rarity-${joker.rarity}`, { triggering, shimmering, 'is-recommended-buy': recommended === 'buy', 'is-recommended-sell': recommended === 'sell' }]"
     :style="{ '--rarity': rarityColor }"
     v-bind="handlers"
     @click="handleClick"
@@ -1145,5 +1156,33 @@ const artType = computed(() => props.joker?.art || 'jimbo')
   }
   .card-art { height: 48px; }
   .card-desc { font-size: 8px; }
+}
+
+/* ========== v1.10.0：商店建议推荐高亮 ========== */
+
+/* buy：金色描边 + 脉冲动画（AI 推荐购买） */
+.joker-card.is-recommended-buy {
+  outline: 3px solid var(--gold, #ffd166);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px 4px rgba(255, 209, 102, .55);
+  animation: joker-recommend-pulse 1.6s ease-in-out infinite;
+}
+
+/* sell：红色描边（AI 推荐卖出，无脉冲以区别 buy） */
+.joker-card.is-recommended-sell {
+  outline: 3px solid var(--danger, #e34b6f);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px 4px rgba(227, 75, 111, .55);
+  animation: joker-recommend-pulse-sell 1.6s ease-in-out infinite;
+}
+
+@keyframes joker-recommend-pulse {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(255, 209, 102, .4); }
+  50%      { box-shadow: 0 0 22px 6px rgba(255, 209, 102, .85); }
+}
+
+@keyframes joker-recommend-pulse-sell {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(227, 75, 111, .4); }
+  50%      { box-shadow: 0 0 22px 6px rgba(227, 75, 111, .85); }
 }
 </style>
