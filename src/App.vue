@@ -1798,99 +1798,89 @@ onBeforeUnmount(() => {
     <Transition name="fade" mode="out-in">
       <!-- ========== SETUP ========== -->
       <div v-if="isSetupPhase" key="setup" class="phase-panel">
-        <div class="setup-layout">
+        <div class="setup-layout setup-compact">
           <div class="setup-hero">
+            <span class="setup-hero-card setup-hero-card-l">
+              <span class="card-corner tl">A<br>♠</span>
+              <span class="card-pip">♠</span>
+            </span>
             <h1 class="setup-title">小丑牌</h1>
-            <p class="setup-sub">扑克肉鸽 · 掌机风格致敬版</p>
-            <div class="setup-cards">
-              <span class="card-demo black tilt-l">
-                <span class="card-corner tl">A<br>♠</span>
-                <span class="card-pip">♠</span>
-                <span class="card-corner br">A<br>♠</span>
-              </span>
-              <span class="card-demo red tilt-r">
-                <span class="card-corner tl">K<br>♥</span>
-                <span class="card-pip">♥</span>
-                <span class="card-corner br">K<br>♥</span>
-              </span>
-            </div>
+            <span class="setup-hero-card setup-hero-card-r">
+              <span class="card-corner tl">K<br>♥</span>
+              <span class="card-pip">♥</span>
+            </span>
           </div>
+          <p class="setup-sub">
+            扑克肉鸽 · 掌机风格致敬版
+            <span class="setup-hero-meta">
+              · {{ selectedDeckConfig.name }} · {{ selectedDifficultyConfig.name }} · 起始 <b class="gold">${{ selectedDifficultyConfig.startingMoney }}</b>
+            </span>
+          </p>
 
           <div class="setup-options">
-            <section class="setup-section">
-              <p class="setup-section-label">牌组</p>
-              <div class="setup-option-list">
-                <button
-                  v-for="option in STARTER_DECK_OPTIONS"
-                  :key="option.key"
-                  @click="selectedDeckOption = option.key"
-                  class="setup-option-card"
-                  :class="{ active: selectedDeckOption === option.key }"
-                >
-                  <div class="setup-option-head">
-                    <h3>{{ option.name }}</h3>
-                    <span class="setup-option-badge">{{ selectedDeckOption === option.key ? '已选择' : '可选' }}</span>
-                  </div>
-                  <p>{{ option.description }}</p>
-                </button>
-              </div>
-            </section>
+            <div class="setup-options-row">
+              <section class="setup-section">
+                <p class="setup-section-label">牌组</p>
+                <div class="setup-option-list">
+                  <button
+                    v-for="option in STARTER_DECK_OPTIONS"
+                    :key="option.key"
+                    @click="selectedDeckOption = option.key"
+                    class="setup-option-card"
+                    :class="{ active: selectedDeckOption === option.key }"
+                    :title="option.description"
+                  >
+                    <div class="setup-option-head">
+                      <h3>{{ option.name }}</h3>
+                      <span class="setup-option-badge">{{ selectedDeckOption === option.key ? '已选' : '' }}</span>
+                    </div>
+                  </button>
+                </div>
+              </section>
 
-            <section class="setup-section">
-              <p class="setup-section-label">难度</p>
-              <div class="setup-option-list">
-                <button
-                  v-for="option in DIFFICULTY_OPTIONS"
-                  :key="option.key"
-                  @click="selectedDifficultyOption = option.key"
-                  class="setup-option-card"
-                  :class="{ active: selectedDifficultyOption === option.key }"
-                >
-                  <div class="setup-option-head">
-                    <h3>{{ option.name }}</h3>
-                    <span class="setup-option-badge">起始 ${{ option.startingMoney }}</span>
-                  </div>
-                  <p>{{ option.description }}</p>
-                </button>
-              </div>
-            </section>
-
-            <div class="setup-summary">
-              <div class="setup-summary-item">
-                <span class="setup-summary-label">起始牌组</span>
-                <span class="setup-summary-value">{{ selectedDeckConfig.name }}</span>
-              </div>
-              <div class="setup-summary-item">
-                <span class="setup-summary-label">难度</span>
-                <span class="setup-summary-value">{{ selectedDifficultyConfig.name }}</span>
-              </div>
-              <div class="setup-summary-item">
-                <span class="setup-summary-label">起始金币</span>
-                <span class="setup-summary-value gold">${{ selectedDifficultyConfig.startingMoney }}</span>
-              </div>
+              <section class="setup-section">
+                <p class="setup-section-label">难度</p>
+                <div class="setup-option-list">
+                  <button
+                    v-for="option in DIFFICULTY_OPTIONS"
+                    :key="option.key"
+                    @click="selectedDifficultyOption = option.key"
+                    class="setup-option-card"
+                    :class="{ active: selectedDifficultyOption === option.key }"
+                    :title="option.description"
+                  >
+                    <div class="setup-option-head">
+                      <h3>{{ option.name }}</h3>
+                      <span class="setup-option-badge">${{ option.startingMoney }}</span>
+                    </div>
+                  </button>
+                </div>
+              </section>
             </div>
 
-            <button @click="startRun" class="btn-primary-lg">
+            <button @click="startRun" class="btn-primary-lg btn-primary-hero">
               开始游戏
             </button>
 
-            <!-- v3.2.0 B6：AI 托管模式入口 -->
-            <button
-              class="btn-ai-pilot"
-              :disabled="!canStartSoloPilot"
-              :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
-              @click="startSoloPilot"
-            >
-              🔮 AI 托管模式
-            </button>
-            <!-- v3.2.0 B7：双 AI 对战入口（v3.2.0 降级版：按钮存在，完整双路留 v3.3.0） -->
-            <button
-              class="btn-ai-duel"
-              :disabled="true"
-              :title="duelPilotDisabledReason"
-            >
-              ⚔️ 双 AI 对战
-            </button>
+            <div class="setup-ai-row">
+              <!-- v3.2.0 B6：AI 托管模式入口 -->
+              <button
+                class="btn-ai-pilot"
+                :disabled="!canStartSoloPilot"
+                :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
+                @click="startSoloPilot"
+              >
+                🔮 AI 托管模式
+              </button>
+              <!-- v3.2.0 B7：双 AI 对战入口（v3.2.0 降级版：按钮存在，完整双路留 v3.3.0） -->
+              <button
+                class="btn-ai-duel"
+                :disabled="true"
+                :title="duelPilotDisabledReason"
+              >
+                ⚔️ 双 AI 对战
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -2362,7 +2352,12 @@ onBeforeUnmount(() => {
    CSS Variables & Global
    ===================================================== */
 .balatro-shell {
-  --bg: #0e0716;
+  --bg: #082818;
+  --felt-deep: #082818;
+  --felt-mid: #0b3a24;
+  --felt-high: #0d4a2e;
+  --wood-dark: #1a1008;
+  --wood: #3a2414;
   --panel: #1f1130;
   --panel-2: #2a1a3f;
   --line: #43295e;
@@ -2380,10 +2375,18 @@ onBeforeUnmount(() => {
 
   height: 100vh;
   overflow: hidden;
+  position: relative;
   background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(122, 80, 188, 0.20), transparent 60%),
-    radial-gradient(900px 600px at 100% 30%, rgba(56, 197, 255, 0.10), transparent 60%),
-    linear-gradient(180deg, #0a0512 0%, #0e0716 50%, #0a0512 100%);
+    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(255, 235, 190, 0.10), transparent 65%),
+    radial-gradient(ellipse 90% 70% at 50% 45%, rgba(40, 130, 80, 0.32), transparent 72%),
+    radial-gradient(ellipse 130% 105% at 50% 55%, transparent 50%, rgba(0, 0, 0, 0.58) 100%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.030) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, var(--felt-high) 0%, var(--felt-mid) 50%, var(--felt-deep) 100%);
+  box-shadow:
+    inset 0 0 0 7px var(--wood),
+    inset 0 0 0 9px var(--wood-dark),
+    inset 0 0 90px rgba(0, 0, 0, 0.55);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, 'PingFang SC', sans-serif;
 }
@@ -2486,6 +2489,12 @@ onBeforeUnmount(() => {
   height: 100%;
   overflow-y: auto;
   padding: 28px;
+}
+/* setup 阶段：内容垂直居中并撑满，避免贴顶留大量空白 */
+.phase-panel:has(.setup-compact) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* =====================================================
@@ -2835,6 +2844,280 @@ onBeforeUnmount(() => {
 .setup-summary-value.gold { color: var(--gold); }
 
 /* =====================================================
+   SETUP COMPACT — Balatro 风首屏
+   设计语言：黑色厚边面板 + 像素字体 + 3D 立体按钮 + 高对比红/金/紫
+   ===================================================== */
+.setup-compact {
+  gap: 56px;            /* 上下分布拉开，撑满视觉 */
+  max-width: 760px;
+  width: 100%;
+}
+
+/* ---------- Hero：标题 + 装饰扑克 ---------- */
+.setup-compact .setup-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 16px 0 8px;
+}
+.setup-hero-card {
+  width: 110px;
+  height: 154px;
+  border-radius: 14px;
+  background: #fff8ec;
+  box-shadow: 0 8px 0 rgba(0,0,0,.55), 0 0 0 4px #1a0610, 0 16px 40px rgba(0,0,0,.5);
+  position: relative;
+  flex-shrink: 0;
+}
+.setup-hero-card-l {
+  transform: rotate(-14deg) translateY(8px);
+  color: #1a1024;
+}
+.setup-hero-card-r {
+  transform: rotate(12deg) translateY(4px);
+  color: #d6234a;
+}
+.setup-hero-card .card-corner {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 900;
+  text-align: center;
+}
+.setup-hero-card .card-pip {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 64px;
+}
+
+/* 标题：粗黑描边 + 金填 + 红厚底影 = Balatro 卡牌字风格 */
+.setup-compact .setup-title {
+  font-size: 110px;
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: #ffd166;
+  margin: 0;
+  line-height: 1;
+  text-shadow:
+    -3px 0 0 #1a0610, 3px 0 0 #1a0610, 0 -3px 0 #1a0610, 0 3px 0 #1a0610,
+    -3px -3px 0 #1a0610, 3px -3px 0 #1a0610, -3px 3px 0 #1a0610, 3px 3px 0 #1a0610,
+    -4px 4px 0 #1a0610, 4px 4px 0 #1a0610,
+    0 10px 0 #6b1f2a,
+    0 14px 0 #1a0610,
+    0 18px 40px rgba(214, 35, 74, 0.6);
+  font-family: 'Inter', system-ui, 'PingFang SC', sans-serif;
+}
+
+.setup-compact .setup-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(246, 239, 225, 0.55);
+  text-align: center;
+  font-family: 'VT323', 'Press Start 2P', monospace;
+  letter-spacing: 1px;
+}
+.setup-hero-meta { margin-left: 6px; color: rgba(246, 239, 225, 0.45); }
+.setup-hero-meta b.gold { color: #ffd166; font-weight: 700; }
+
+.setup-compact .setup-options { gap: 12px; }
+
+/* 牌组 + 难度 横向两列 */
+.setup-options-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ---------- 黑色厚边面板（替换原紫色 panel） ---------- */
+.setup-compact .setup-section {
+  padding: 12px 14px 14px;
+  border-radius: 8px;
+  background: #0a0410;
+  border: 3px solid #1a0610;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 4px 0 rgba(0, 0, 0, 0.45);
+}
+.setup-compact .setup-section-label {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 3px;
+  font-family: 'Press Start 2P', monospace;
+  color: rgba(246, 239, 225, 0.45);
+  text-transform: uppercase;
+}
+
+/* ---------- 选项 chip：深底 + 高对比 active 态 ---------- */
+.setup-compact .setup-option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.setup-compact .setup-option-card {
+  padding: 8px 12px;
+  border-radius: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #1a0c1f;
+  border: 2px solid #0a0410;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, border-color 0.15s ease;
+}
+.setup-compact .setup-option-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 209, 102, 0.4);
+}
+.setup-compact .setup-option-card:active {
+  transform: translateY(1px);
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0.4);
+}
+.setup-compact .setup-option-card.active {
+  background: linear-gradient(180deg, #3a2b0a, #1f1505);
+  border-color: #ffd166;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 209, 102, 0.35);
+}
+.setup-compact .setup-option-head { gap: 8px; }
+.setup-compact .setup-option-head h3 {
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-compact .setup-option-badge {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-family: 'Press Start 2P', monospace;
+  color: rgba(255, 209, 102, 0.7);
+  white-space: nowrap;
+}
+.setup-compact .setup-option-card.active .setup-option-badge {
+  color: #ffd166;
+}
+
+/* ---------- 3D 立体按钮（Balatro 招牌按下感） ---------- */
+.setup-compact .btn-primary-hero,
+.setup-compact .btn-ai-pilot,
+.setup-compact .btn-ai-duel {
+  width: 100%;
+  margin: 0;
+  border-radius: 8px;
+  font-family: 'Press Start 2P', 'PingFang SC', monospace;
+  letter-spacing: 2px;
+  border-width: 3px;
+  border-style: solid;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  text-transform: none;
+}
+
+/* 主按钮：开始游戏（红） */
+.setup-compact .btn-primary-hero {
+  padding: 18px 24px;
+  font-size: 17px;
+  background: linear-gradient(180deg, #ef476f, #c4173d);
+  border-color: #1a0610;
+  color: #fff8ec;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 6px 0 #6b1f2a,
+    0 8px 0 #1a0610,
+    0 10px 30px rgba(239, 71, 111, 0.35);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+.setup-compact .btn-primary-hero:hover:not(:disabled):not(.disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 8px 0 #6b1f2a,
+    0 10px 0 #1a0610,
+    0 12px 40px rgba(239, 71, 111, 0.5);
+}
+.setup-compact .btn-primary-hero:active:not(:disabled):not(.disabled) {
+  transform: translateY(6px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 0 #6b1f2a,
+    0 2px 0 #1a0610;
+}
+
+/* AI 托管按钮（紫） */
+.setup-compact .btn-ai-pilot {
+  padding: 13px 20px;
+  font-size: 12px;
+  background: linear-gradient(180deg, #7c3aed, #4c1d95);
+  border-color: #1a0610;
+  color: #f3e8ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 5px 0 #2d0a64,
+    0 7px 0 #1a0610;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+.setup-compact .btn-ai-pilot:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 7px 0 #2d0a64,
+    0 9px 0 #1a0610,
+    0 10px 24px rgba(124, 58, 237, 0.5);
+}
+.setup-compact .btn-ai-pilot:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 #2d0a64,
+    0 2px 0 #1a0610;
+}
+.setup-compact .btn-ai-pilot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 双 AI 对战按钮（深紫，disabled 默认） */
+.setup-compact .btn-ai-duel {
+  padding: 13px 20px;
+  font-size: 12px;
+  background: linear-gradient(180deg, #2d1b4d, #160a26);
+  border-color: #1a0610;
+  color: rgba(233, 213, 255, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 5px 0 #0d0418,
+    0 7px 0 #1a0610;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+  cursor: not-allowed;
+}
+
+/* AI 双按钮横向并排 */
+.setup-ai-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* 窄屏：恢复纵向 */
+@media (max-width: 640px) {
+  .setup-options-row,
+  .setup-ai-row {
+    grid-template-columns: 1fr;
+  }
+  .setup-compact .setup-title { font-size: 40px; letter-spacing: 6px; }
+  .setup-hero-card { width: 44px; height: 62px; }
+  .setup-hero-card .card-pip { font-size: 24px; }
+  .setup-hero-card .card-corner { font-size: 11px; }
+  .setup-compact .btn-primary-hero { padding: 14px 18px; font-size: 14px; }
+  .setup-compact .btn-ai-pilot,
+  .setup-compact .btn-ai-duel { padding: 11px 16px; font-size: 11px; }
+}
+
+/* =====================================================
    BLIND SELECT
    ===================================================== */
 .blind-select-screen {
@@ -3160,9 +3443,8 @@ onBeforeUnmount(() => {
   gap: 10px;
   padding: 12px 16px 8px;
   background:
-    radial-gradient(80% 60% at 50% 20%, rgba(122,80,188,.18), transparent 60%),
-    radial-gradient(60% 60% at 50% 110%, rgba(56,197,255,.08), transparent 60%),
-    linear-gradient(180deg, #1a0c2c, #0e0617 90%);
+    radial-gradient(70% 45% at 50% 8%, rgba(255, 235, 190, 0.08), transparent 65%),
+    radial-gradient(85% 55% at 50% 100%, rgba(0, 0, 0, 0.35), transparent 70%);
 }
 
 /* HUD */

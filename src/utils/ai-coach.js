@@ -2,6 +2,7 @@ import {
   AI_PROVIDERS,
   AI_STORAGE_KEY,
   DEFAULT_AI_SETTINGS,
+  LEGACY_MODEL_MIGRATION,
   COACH_THROTTLE_MS,
   COACH_REQUEST_TIMEOUT_MS,
   COACH_SYSTEM_PROMPT,
@@ -86,6 +87,11 @@ function loadSettings() {
           apiKey: merged.apiKey
         }
         merged.providers = mergedProviders
+      }
+
+      // v3.2.0 修复：把残留的虚构 model id 迁移到真实模型，避免 empty_response
+      if (merged.model && LEGACY_MODEL_MIGRATION[merged.model]) {
+        merged.model = LEGACY_MODEL_MIGRATION[merged.model]
       }
 
       return merged
@@ -340,6 +346,7 @@ function buildDeepSeekPayload(systemPrompt, payload, snap) {
       model: snap.model,
       max_tokens: snap.maxTokens,
       temperature: snap.temperature,
+      response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: `当前游戏状态：\n${JSON.stringify(payload, null, 2)}\n\n请输出 JSON。` }

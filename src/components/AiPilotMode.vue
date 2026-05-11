@@ -216,15 +216,39 @@ function detailText(entry) {
 // ──────────────────────────────────────────────────────────────────────────
 const logListRef = ref(null)
 
+// ──────────────────────────────────────────────────────────────────────────
+// 抽屉控制（默认收起，新决策来时按钮 badge +1；打开后清零）
+// 「清屏」纯前端：记录截止条数，渲染时跳过；不动 props.log，导出仍是全量
+// ──────────────────────────────────────────────────────────────────────────
+const panelOpen = ref(false)
+const hiddenUntil = ref(0)
+const unreadCount = ref(0)
+
+const visibleLog = computed(() => props.log.slice(hiddenUntil.value))
+
 watch(
   () => props.log.length,
-  async () => {
+  async (newLen, oldLen) => {
+    if (newLen > oldLen && !panelOpen.value) {
+      unreadCount.value += newLen - oldLen
+    }
     await nextTick()
     if (logListRef.value) {
       logListRef.value.scrollTop = logListRef.value.scrollHeight
     }
   }
 )
+
+function togglePanel() {
+  audio.playSfx?.('uiClick')
+  panelOpen.value = !panelOpen.value
+  if (panelOpen.value) unreadCount.value = 0
+}
+
+function clearVisibleLog() {
+  audio.playSfx?.('uiClick')
+  hiddenUntil.value = props.log.length
+}
 </script>
 
 <template>
@@ -339,38 +363,80 @@ watch(
       </section>
 
       <!-- ────────────────────────────────────────────────────────────────
-           底部决策日志区
+           日志浮动按钮（始终显示，右下角，避开手牌区）
            ──────────────────────────────────────────────────────────────── -->
-      <footer class="ai-pilot-log">
+      <button
+        class="ai-pilot-fab"
+        :class="{ 'is-open': panelOpen }"
+        :title="panelOpen ? '收起决策日志' : '展开决策日志'"
+        @click="togglePanel"
+      >
+        <span class="fab-icon" aria-hidden="true">
+          {{ panelOpen ? '×' : '📜' }}
+        </span>
+        <span
+          v-if="!panelOpen && unreadCount > 0"
+          class="fab-badge"
+          :class="{ 'badge-99': unreadCount > 99 }"
+        >
+          {{ unreadCount > 99 ? '99+' : unreadCount }}
+        </span>
+      </button>
 
-        <div class="log-head">
-          <span class="log-count">决策日志（{{ log.length }} 条）</span>
-          <button
-            class="log-export-btn"
-            @click="onExportLog"
-            :disabled="!log?.length"
-          >
-            导出 JSON
-          </button>
-        </div>
+      <!-- ────────────────────────────────────────────────────────────────
+           决策日志抽屉（默认收起，从右滑入）
+           ──────────────────────────────────────────────────────────────── -->
+      <Transition name="drawer">
+        <aside v-if="panelOpen" class="ai-pilot-drawer">
 
-        <ul class="log-list" ref="logListRef">
-          <li
-            v-for="entry in log"
-            :key="entry.step"
-            :class="['log-item', `log-kind-${entry.kind}`]"
-          >
-            <span class="log-step">#{{ entry.step }}</span>
-            <span class="log-time">{{ formatTime(entry.at) }}</span>
-            <span v-if="mode === 'duel' && entry.side" class="log-side">
-              [{{ entry.side }}]
+          <header class="drawer-head">
+            <span class="drawer-title">
+              决策日志
+              <span class="drawer-count">{{ visibleLog.length }} / {{ log.length }}</span>
             </span>
-            <span class="log-kind-label">{{ kindLabel(entry) }}</span>
-            <span class="log-detail">{{ detailText(entry) }}</span>
-          </li>
-        </ul>
+            <div class="drawer-actions">
+              <button
+                class="drawer-action-btn"
+                @click="clearVisibleLog"
+                :disabled="!visibleLog.length"
+                title="清空当前显示（导出 JSON 仍是全量）"
+              >
+                清屏
+              </button>
+              <button
+                class="drawer-action-btn"
+                @click="onExportLog"
+                :disabled="!log?.length"
+                title="导出全部决策为 JSON 文件"
+              >
+                导出 JSON
+              </button>
+            </div>
+          </header>
 
-      </footer>
+          <ul v-if="visibleLog.length" class="log-list" ref="logListRef">
+            <li
+              v-for="entry in visibleLog"
+              :key="entry.step"
+              :class="['log-item', `log-kind-${entry.kind}`]"
+            >
+              <span class="log-step">#{{ entry.step }}</span>
+              <span class="log-time">{{ formatTime(entry.at) }}</span>
+              <span v-if="mode === 'duel' && entry.side" class="log-side">
+                [{{ entry.side }}]
+              </span>
+              <span class="log-kind-label">{{ kindLabel(entry) }}</span>
+              <span class="log-detail">{{ detailText(entry) }}</span>
+            </li>
+          </ul>
+
+          <div v-else class="drawer-empty">
+            <p v-if="log.length === 0">尚无决策记录</p>
+            <p v-else>已清屏 · 共 {{ log.length }} 条历史可在「导出 JSON」中查看</p>
+          </div>
+
+        </aside>
+      </Transition>
 
       <!-- ────────────────────────────────────────────────────────────────
            中止确认弹窗（v3.2.0 文档文案锁定）
@@ -420,7 +486,7 @@ watch(
   position: fixed;
   inset: 0;
   z-index: 9200;                     /* 高于 SettingsPanel (9000) */
-  background: rgba(8, 10, 22, 0.88);
+  background: transparent;            /* 无蒙层：游戏画面完全透出；点击仍被根容器拦截 */
   display: flex;
   flex-direction: column;
   font-family: inherit;
@@ -919,5 +985,193 @@ watch(
 .modal-leave-to {
   opacity: 0;
   transform: scale(0.96);
+}
+
+/* ===========================================================================
+   日志浮动按钮（始终显示，避开手牌区）
+   =========================================================================== */
+.ai-pilot-fab {
+  position: absolute;
+  right: 18px;
+  bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid rgba(147, 77, 255, 0.5);
+  background: linear-gradient(180deg, rgba(40, 22, 80, 0.95), rgba(16, 8, 36, 0.95));
+  color: #e6e9f5;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 2;
+  -webkit-tap-highlight-color: transparent;
+}
+.ai-pilot-fab:hover {
+  transform: scale(1.08);
+  border-color: rgba(147, 77, 255, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 6px rgba(147, 77, 255, 0.15);
+}
+.ai-pilot-fab:active { transform: scale(0.96); }
+.ai-pilot-fab.is-open {
+  background: linear-gradient(180deg, rgba(80, 22, 60, 0.95), rgba(36, 8, 24, 0.95));
+  border-color: rgba(255, 80, 120, 0.5);
+  font-size: 26px;
+}
+
+.fab-icon { line-height: 1; }
+.fab-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ff4d6d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(8, 10, 22, 0.95);
+  animation: badge-pop 0.3s ease;
+}
+.fab-badge.badge-99 { font-size: 9px; padding: 0 4px; }
+@keyframes badge-pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* ===========================================================================
+   日志抽屉（右侧滑入）
+   =========================================================================== */
+.ai-pilot-drawer {
+  position: absolute;
+  top: 80px;
+  right: 0;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  width: 380px;
+  max-width: 88vw;
+  background: linear-gradient(180deg, rgba(20, 12, 44, 0.97), rgba(12, 8, 30, 0.97));
+  border-left: 1px solid rgba(147, 77, 255, 0.3);
+  border-top: 1px solid rgba(147, 77, 255, 0.2);
+  border-bottom: 1px solid rgba(147, 77, 255, 0.2);
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.drawer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e6e9f5;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.drawer-count {
+  font-size: 11px;
+  color: rgba(230, 233, 245, 0.45);
+  font-weight: 400;
+}
+.drawer-actions {
+  display: flex;
+  gap: 8px;
+}
+.drawer-action-btn {
+  padding: 5px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e6e9f5;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.drawer-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(147, 77, 255, 0.5);
+}
+.drawer-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.drawer-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  text-align: center;
+  color: rgba(230, 233, 245, 0.4);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 抽屉内的 log-list 需要左右内边距，避免条目贴边 */
+.ai-pilot-drawer .log-list {
+  padding: 6px 12px;
+}
+
+/* 抽屉滑入/滑出 */
+.drawer-enter-active,
+.drawer-leave-active {
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
+}
+.drawer-enter-from,
+.drawer-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* ===========================================================================
+   移动端适配（窄屏 / 触摸友好）
+   =========================================================================== */
+@media (max-width: 640px) {
+  .ai-pilot-fab {
+    right: 14px;
+    /* 移动端手牌往往更靠近底部，再往上抬一点避免误触 */
+    bottom: calc(170px + env(safe-area-inset-bottom, 0px));
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .ai-pilot-fab.is-open { font-size: 24px; }
+
+  .ai-pilot-drawer {
+    top: 70px;
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+    width: 92vw;
+    max-width: 92vw;
+  }
+  .drawer-head { padding: 10px 12px; }
+  .drawer-title { font-size: 12px; }
+  .drawer-action-btn {
+    padding: 7px 12px;
+    font-size: 12px;
+    min-height: 36px;  /* 触摸目标 ≥36pt */
+  }
+  .ai-pilot-drawer .log-list { padding: 6px 10px; }
+  .log-item { font-size: 11px; padding: 4px 6px; }
 }
 </style>

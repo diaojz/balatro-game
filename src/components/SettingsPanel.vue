@@ -2,6 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import * as audio from '../utils/audio.js'
 import * as ai from '../utils/ai-coach.js'
+import { AI_PROVIDERS } from '../config/ai.js'
 
 defineProps({ open: Boolean })
 const emit = defineEmits(['close'])
@@ -34,25 +35,10 @@ const providerKeys = Object.keys(aiSettings.provider
   ? { [aiSettings.provider]: {} }
   : {})
 
-const availableModels = ref(getModelsForProvider(aiSettings.provider))
 function getModelsForProvider(providerKey) {
-  const providers = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI (GPT)' }
-  // 从 ai config 获取模型列表
-  try {
-    const cfg = { anthropic: { models: [
-      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5（快、便宜，推荐）' },
-      { id: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6（更强）' },
-      { id: 'claude-opus-4-7',           label: 'Claude Opus 4.7（最强、最贵）' }
-    ]}, openai: { models: [
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini（快、便宜，推荐）' },
-      { id: 'gpt-4o',      label: 'GPT-4o（更强）' }
-    ]}, deepseek: { models: [
-      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash（快、便宜，推荐）' },
-      { id: 'deepseek-v4-pro',   label: 'DeepSeek-V4-Pro（更强）' }
-    ]}}
-    return cfg[providerKey]?.models || []
-  } catch (_) { return [] }
+  return AI_PROVIDERS[providerKey]?.models || []
 }
+const availableModels = ref(getModelsForProvider(aiSettings.provider))
 
 watch(() => aiSettings.provider, (p) => {
   const models = getModelsForProvider(p)

@@ -27,23 +27,27 @@ export const AI_PROVIDERS = {
   deepseek: {
     label: 'DeepSeek',
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
-    defaultModel: 'deepseek-v4-flash',
+    defaultModel: 'deepseek-chat',
     models: [
-      { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash（快、便宜，推荐）' },
-      { id: 'deepseek-v4-pro',   label: 'DeepSeek-V4-Pro（更强）' }
-    ],
-    extraHeaders: {
-      'x-api-key': null
-    }
+      { id: 'deepseek-chat',     label: 'DeepSeek-Chat（V3.2-Exp，快、便宜，推荐）' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek-Reasoner（带思考链，更强、更慢）' }
+    ]
   }
+}
+
+// 老用户 localStorage 里可能残留虚构的 model id（v3.0.0–v3.2.0 配置错误），
+// 启动时按此映射自动迁移到真实模型，避免触发 empty_response。
+export const LEGACY_MODEL_MIGRATION = {
+  'deepseek-v4-flash': 'deepseek-chat',
+  'deepseek-v4-pro':   'deepseek-chat'
 }
 
 export const DEFAULT_AI_SETTINGS = {
   enabled: false,
   provider: 'deepseek',
   apiKey: '',
-  model: 'deepseek-v4-flash',
-  maxTokens: 400,
+  model: 'deepseek-chat',
+  maxTokens: 800,
   temperature: 0.3
 }
 
