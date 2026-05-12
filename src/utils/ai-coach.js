@@ -6,11 +6,10 @@ import {
   COACH_THROTTLE_MS,
   COACH_REQUEST_TIMEOUT_MS,
   COACH_SYSTEM_PROMPT,
-  DISCARD_SYSTEM_PROMPT,
-  SHOP_SYSTEM_PROMPT,
-  BLIND_SYSTEM_PROMPT,
   COACH_SCENES,
-  COACH_SCENE_KEYS
+  COACH_SCENE_KEYS,
+  PROMPT_STORAGE_KEY,
+  DEFAULT_PROMPTS
 } from '../config/ai.js'
 
 export class AiCoachError extends Error {
@@ -89,7 +88,7 @@ function loadSettings() {
         merged.providers = mergedProviders
       }
 
-      // v3.2.0 修复：把残留的虚构 model id 迁移到真实模型，避免 empty_response
+      // 把老用户 localStorage 里残留的 v3 model id 迁移到 v4（DeepSeek V4 发布于 2026-04 底）
       if (merged.model && LEGACY_MODEL_MIGRATION[merged.model]) {
         merged.model = LEGACY_MODEL_MIGRATION[merged.model]
       }
@@ -194,6 +193,73 @@ export function updateProviderApiKey(providerKey, apiKey) {
     settings.apiKey = apiKey
   }
   saveSettings()
+}
+
+// ============== v3.2.1：自定义提示词读写 ==============
+//
+// 数据流：localStorage[PROMPT_STORAGE_KEY] = { play, discard, shop, blind }
+// 空串或缺失字段 → fallback 到 DEFAULT_PROMPTS[scene]
+// 自定义版直接覆盖默认，4 个 requestXxxAdvice 在调用 LLM 时读取生效值。
+
+/**
+ * 读取当前生效的 system prompt（自定义优先，默认 fallback）
+ * @param {'play'|'discard'|'shop'|'blind'} scene
+ * @returns {string}
+ */
+export function getActivePrompt(scene) {
+  try {
+    const raw = localStorage.getItem(PROMPT_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const userPrompt = parsed?.[scene]
+      if (typeof userPrompt === 'string' && userPrompt.trim()) {
+        return userPrompt
+      }
+    }
+  } catch (_) { /* ignore */ }
+  return DEFAULT_PROMPTS[scene] ?? ''
+}
+
+/**
+ * 读取用户自定义覆写状态（不 fallback；空串 = 未自定义）
+ * SettingsPanel 用它判断"已自定义"徽章
+ * @returns {{ play: string, discard: string, shop: string, blind: string }}
+ */
+export function getCustomPrompts() {
+  try {
+    const raw = localStorage.getItem(PROMPT_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return {
+        play:    typeof parsed?.play === 'string'    ? parsed.play    : '',
+        discard: typeof parsed?.discard === 'string' ? parsed.discard : '',
+        shop:    typeof parsed?.shop === 'string'    ? parsed.shop    : '',
+        blind:   typeof parsed?.blind === 'string'   ? parsed.blind   : ''
+      }
+    }
+  } catch (_) { /* ignore */ }
+  return { play: '', discard: '', shop: '', blind: '' }
+}
+
+/**
+ * 保存指定场景的自定义 prompt。空串 = 恢复默认（移除自定义）
+ * @param {'play'|'discard'|'shop'|'blind'} scene
+ * @param {string} value
+ */
+export function setCustomPrompt(scene, value) {
+  const current = getCustomPrompts()
+  current[scene] = typeof value === 'string' ? value : ''
+  try {
+    localStorage.setItem(PROMPT_STORAGE_KEY, JSON.stringify(current))
+  } catch (_) { /* ignore */ }
+}
+
+/**
+ * 恢复指定场景的默认 prompt（删除自定义版）
+ * @param {'play'|'discard'|'shop'|'blind'} scene
+ */
+export function resetCustomPrompt(scene) {
+  setCustomPrompt(scene, '')
 }
 
 // ============== 序列化函数 ==============
@@ -341,22 +407,38 @@ function clampConfidence(v) {
  * @param {object} snap - settings 快照（含 model / maxTokens / temperature 与已解析的 apiKey）
  */
 function buildDeepSeekPayload(systemPrompt, payload, snap) {
+  // DeepSeek v4 系列（v4-flash / v4-pro）是推理模型：先生成 reasoning_content 推理链再产 content。
+  // 推理链动辄数百 token，默认 maxTokens=800 不够（实测推理被截断在 400 token 未出 JSON 结论）；
+  // 给 v4 至少 4096 让推理跑完。同时去 response_format json_object——推理模型在 reasoning 里
+  // 用自然语言思考，强制 JSON mode 反而干扰；最终 JSON 由 parseRawJson 从混合文本中提取。
+  const isReasoner = /v4/i.test(snap.model || '')
+  const effectiveMaxTokens = isReasoner ? Math.max(snap.maxTokens, 4096) : snap.maxTokens
+
+  const body = {
+    model: snap.model,
+    max_tokens: effectiveMaxTokens,
+    temperature: snap.temperature,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: `当前游戏状态：\n${JSON.stringify(payload, null, 2)}\n\n请输出 JSON。` }
+    ]
+  }
+  if (!isReasoner) {
+    body.response_format = { type: 'json_object' }
+  }
+
   return {
-    body: {
-      model: snap.model,
-      max_tokens: snap.maxTokens,
-      temperature: snap.temperature,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: `当前游戏状态：\n${JSON.stringify(payload, null, 2)}\n\n请输出 JSON。` }
-      ]
-    },
+    body,
     headers: {
       'content-type': 'application/json',
       'authorization': `Bearer ${snap._resolvedApiKey}`
     },
-    parseResponse: (json) => json?.choices?.[0]?.message?.content ?? ''
+    parseResponse: (json) => {
+      // v3 chat 模型把回答放 content；v4 推理模型（v4-flash / v4-pro）把回答放 reasoning_content，
+      // content 字段为空字符串。同时兼容两种，让用户切到任意 model 都能正常解析。
+      const msg = json?.choices?.[0]?.message
+      return msg?.content || msg?.reasoning_content || ''
+    }
   }
 }
 
@@ -477,13 +559,22 @@ async function callLLM(systemPrompt, userJsonPayload, snap) {
 }
 
 function parseRawJson(rawText) {
+  // 第一步：剥 markdown 代码块后整体 parse（v3 chat 路径，最快）
+  const stripped = rawText.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
   try {
-    // 容错：有些模型仍可能裹一层 ```json ... ```，剥掉
-    const cleaned = rawText.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
-    return JSON.parse(cleaned)
-  } catch (e) {
-    throw new AiCoachError('invalid_response', `非 JSON: ${rawText.slice(0, 80)}`)
+    return JSON.parse(stripped)
+  } catch (_) { /* 继续退路 */ }
+
+  // 第二步：从混合文本中提取最外层 { ... }（v4 推理模型路径）
+  // 推理链常见格式："我考虑一下... 输出 JSON。{...}"——JSON 嵌在文本最后
+  const match = stripped.match(/\{[\s\S]*\}/)
+  if (match) {
+    try {
+      return JSON.parse(match[0])
+    } catch (_) { /* fall through */ }
   }
+
+  throw new AiCoachError('invalid_response', `非 JSON: ${rawText.slice(0, 120)}`)
 }
 
 // ============== 校验函数 ==============
@@ -578,7 +669,7 @@ export async function requestPlayAdvice(gameState, options = {}) {
   checkThrottle(COACH_SCENES.PLAY, fingerprint('play', gameState))
   const state = serializePlayState(gameState)
   const snap = buildSettingsSnapshot(options.providerOverride ?? null)
-  const advice = await callLLM(COACH_SYSTEM_PROMPT, state, snap)
+  const advice = await callLLM(getActivePrompt('play'), state, snap)
   return validatePlayAdvice(advice, gameState.hand)
 }
 
@@ -600,7 +691,7 @@ export async function requestDiscardAdvice(gameState, options = {}) {
   checkThrottle(COACH_SCENES.DISCARD, fingerprint('discard', gameState))
   const state = serializePlayState(gameState)  // 弃牌与出牌共享 game state shape
   const snap = buildSettingsSnapshot(options.providerOverride ?? null)
-  const advice = await callLLM(DISCARD_SYSTEM_PROMPT, state, snap)
+  const advice = await callLLM(getActivePrompt('discard'), state, snap)
   return validateDiscardAdvice(advice, gameState.hand)
 }
 
@@ -614,7 +705,7 @@ export async function requestShopAdvice(shopState, options = {}) {
   checkThrottle(COACH_SCENES.SHOP, fingerprint('shop', shopState))
   const state = serializeShopState(shopState)
   const snap = buildSettingsSnapshot(options.providerOverride ?? null)
-  const advice = await callLLM(SHOP_SYSTEM_PROMPT, state, snap)
+  const advice = await callLLM(getActivePrompt('shop'), state, snap)
   return validateShopAdvice(advice, shopState)
 }
 
@@ -628,7 +719,7 @@ export async function requestBlindAdvice(blindState, options = {}) {
   checkThrottle(COACH_SCENES.BLIND, fingerprint('blind', blindState))
   const state = serializeBlindState(blindState)
   const snap = buildSettingsSnapshot(options.providerOverride ?? null)
-  const advice = await callLLM(BLIND_SYSTEM_PROMPT, state, snap)
+  const advice = await callLLM(getActivePrompt('blind'), state, snap)
   return validateBlindAdvice(advice, blindState.candidateBlinds)
 }
 

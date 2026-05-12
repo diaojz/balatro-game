@@ -29,18 +29,19 @@ export const AI_PROVIDERS = {
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
     defaultModel: 'deepseek-chat',
     models: [
-      { id: 'deepseek-chat',     label: 'DeepSeek-Chat（V3.2-Exp，快、便宜，推荐）' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-Reasoner（带思考链，更强、更慢）' }
+      { id: 'deepseek-chat',     label: 'DeepSeek-Chat（V3.2-Exp，稳定，默认）' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek-Reasoner（V3 思考链）' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash（2026-04，需自行确认 id）' },
+      { id: 'deepseek-v4-pro',   label: 'DeepSeek V4 Pro（2026-04，需自行确认 id）' }
     ]
   }
 }
 
-// 老用户 localStorage 里可能残留虚构的 model id（v3.0.0–v3.2.0 配置错误），
-// 启动时按此映射自动迁移到真实模型，避免触发 empty_response。
-export const LEGACY_MODEL_MIGRATION = {
-  'deepseek-v4-flash': 'deepseek-chat',
-  'deepseek-v4-pro':   'deepseek-chat'
-}
+// 不再做强制 model id 迁移：保留用户 localStorage 原值，让用户在设置面板里自己选择。
+// 老用户原来用 deepseek-chat / deepseek-reasoner 的继续用；想换 v4 的进面板手动切换。
+// 历史背景：v3.2.0 期间曾把 v4-flash/v4-pro 当成"虚构 id"强制改写为 deepseek-chat，
+// 那次迁移已撤销，但避免再次盲目改写用户已验证可用的设置。
+export const LEGACY_MODEL_MIGRATION = {}
 
 export const DEFAULT_AI_SETTINGS = {
   enabled: false,
@@ -162,6 +163,22 @@ export const BLIND_SYSTEM_PROMPT = `你是 Balatro（小丑牌）的资深玩家
 }
 
 要求：严格 JSON、无 markdown、无前后缀文字。blindId 必须是 candidateBlinds 数组中存在的 id。`
+
+// ============== v3.2.1 扩展：提示词自定义存储 ==============
+
+// 用户自定义提示词的 localStorage 键。结构：
+// { play: '...', discard: '...', shop: '...', blind: '...' }
+// 任一字段为空串 = 该场景使用默认 prompt
+export const PROMPT_STORAGE_KEY = 'balatro:ai:prompts'
+
+// 4 个场景的默认 system prompt 汇总。
+// 用于"恢复默认"按钮 + ai-coach.js 的 getActivePrompt fallback。
+export const DEFAULT_PROMPTS = {
+  play:    COACH_SYSTEM_PROMPT,
+  discard: DISCARD_SYSTEM_PROMPT,
+  shop:    SHOP_SYSTEM_PROMPT,
+  blind:   BLIND_SYSTEM_PROMPT
+}
 
 // ============== v3.2.0 扩展：AI 托管节奏控制 ==============
 
