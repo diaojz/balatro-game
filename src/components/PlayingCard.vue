@@ -61,21 +61,8 @@ const isRed = computed(() => {
   return props.card.suit === 'hearts' || props.card.suit === 'diamonds'
 })
 
-// v1.8.0：Kenney CC0 像素卡面（public/assets/cards/card_<suit>_<rank>.png）
-const cardImageSrc = computed(() => {
-  const rank = props.card.rank
-  let rankStr
-  if (rank >= 2 && rank <= 9) rankStr = '0' + rank
-  else if (rank === 10) rankStr = '10'
-  else if (rank === 11) rankStr = 'J'
-  else if (rank === 12) rankStr = 'Q'
-  else if (rank === 13) rankStr = 'K'
-  else if (rank === 14) rankStr = 'A'
-  else return ''
-  return `/assets/cards/card_${props.card.suit}_${rankStr}.png`
-})
-const useCardImage = ref(true)
-function onCardImageError() { useCardImage.value = false }
+// v1.8.0：放弃 Kenney 64x64 卡面（1:1 拉伸到 5:7 会失真），保留 CSS 渲染
+const useCardImage = ref(false)
 
 // v3.1.0：把 Boolean true 视同 'play'，统一归一为枚举值
 const recommendedKind = computed(() => {
@@ -126,29 +113,17 @@ defineExpose({ cardRef })
 
     <div v-if="selectable && !selected" class="selection-ring"></div>
 
-    <!-- v1.8.0：Kenney 像素卡面（优先），加载失败回退到 CSS 渲染 -->
-    <img
-      v-if="useCardImage"
-      :src="cardImageSrc"
-      class="card-face-img"
-      alt=""
-      draggable="false"
-      @error="onCardImageError"
-    />
+    <div class="corner top-left">
+      <div class="rank">{{ displayRank }}</div>
+      <div class="suit">{{ suitSymbol }}</div>
+    </div>
 
-    <template v-else>
-      <div class="corner top-left">
-        <div class="rank">{{ displayRank }}</div>
-        <div class="suit">{{ suitSymbol }}</div>
-      </div>
+    <div class="center-suit">{{ suitSymbol }}</div>
 
-      <div class="center-suit">{{ suitSymbol }}</div>
-
-      <div class="corner bottom-right">
-        <div class="rank">{{ displayRank }}</div>
-        <div class="suit">{{ suitSymbol }}</div>
-      </div>
-    </template>
+    <div class="corner bottom-right">
+      <div class="rank">{{ displayRank }}</div>
+      <div class="suit">{{ suitSymbol }}</div>
+    </div>
 
     <div v-if="selected" class="glow-effect"></div>
   </div>
@@ -201,18 +176,19 @@ defineExpose({ cardRef })
   z-index: 1;
 }
 
-/* v1.8.0：Kenney 像素卡面 */
+/* v1.8.0：Kenney 像素卡面 — 拉伸填满整张卡，让设计感占满 */
 .card-face-img {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;     /* 强制铺满，不留外圈 */
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
   pointer-events: none;
   z-index: 2;
+  border-radius: 10px;
 }
 
 .card-bg {
