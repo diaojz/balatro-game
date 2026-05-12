@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { getRarityColor, getRarityLabel } from '../config/jokers.js'
 import { useLongPress } from '../utils/touch.js'
 
@@ -61,6 +61,11 @@ function handleClick() {
 const rarityColor = computed(() => props.joker ? getRarityColor(props.joker.rarity) : '#43295e')
 const rarityLabel = computed(() => props.joker ? getRarityLabel(props.joker.rarity) : '')
 const artType = computed(() => props.joker?.art || 'jimbo')
+
+// v1.8.0：优先使用 PNG 像素插画（public/assets/jokers/<id>.png），加载失败回退到 CSS 像素艺术
+const imageSrc = computed(() => props.joker ? `/assets/jokers/${props.joker.id}.png` : '')
+const useImage = ref(true)
+function onImageError() { useImage.value = false }
 </script>
 
 <template>
@@ -94,9 +99,18 @@ const artType = computed(() => props.joker?.art || 'jimbo')
 
     <!-- 中央像素插画 -->
     <div class="card-art">
-      <component :is="`art-${artType}`" />
-      <!-- art slot：根据 artType 渲染对应像素图案 -->
-      <div class="art-stage" :class="`art-${artType}`">
+      <!-- v1.8.0：PNG 像素插画（优先），加载失败自动回退到 CSS 艺术 -->
+      <img
+        v-if="useImage"
+        :src="imageSrc"
+        class="card-art-img"
+        alt=""
+        draggable="false"
+        @error="onImageError"
+      />
+      <component v-if="!useImage" :is="`art-${artType}`" />
+      <!-- art slot：根据 artType 渲染对应像素图案（PNG 缺失时的回退） -->
+      <div v-show="!useImage" class="art-stage" :class="`art-${artType}`">
         <!-- Jimbo 主小丑 -->
         <template v-if="artType === 'jimbo'">
           <div class="px-hat px-hat-left"></div>
@@ -391,6 +405,24 @@ const artType = computed(() => props.joker?.art || 'jimbo')
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+}
+
+/* v1.8.0：PNG 插画覆盖层 */
+.card-art-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+  z-index: 2;
+}
+.size-shop .card-art-img {
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.4));
 }
 
 /* ----- 通用像素元件（采用 box-shadow 模拟像素方块）----- */
