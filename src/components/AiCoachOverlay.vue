@@ -349,9 +349,12 @@ onUnmounted(() => {
   50%      { box-shadow: 0 0 20px 6px rgba(96, 165, 250, .85); }
 }
 
+/* v1.8.0：气泡改 fixed 锚定到屏幕右侧中段，避开顶部 HUD（chip/mult）和底部手牌区 */
 .ai-bubble {
-  position: absolute;
-  top: 56px; right: 0;
+  position: fixed;
+  top: 50%;
+  right: 24px;
+  transform: translateY(-50%);
   min-width: 240px; max-width: 320px;
   padding: 12px 14px;
   background: linear-gradient(180deg, #2a1f55 0%, #1a1330 100%);
@@ -362,7 +365,7 @@ onUnmounted(() => {
   font-family: 'Press Start 2P', monospace;
   font-size: 11px;
   line-height: 1.55;
-  z-index: 250;
+  z-index: 9500;  /* 高于 pilot-header (9200)、settings (9000) */
 }
 .ai-bubble-head {
   display: flex; align-items: center; gap: 8px;

@@ -1722,7 +1722,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="balatro-shell">
+  <div class="balatro-shell" :class="{ 'pilot-active': pilotVisible }">
     <!-- 全局设置入口（任意 phase 可见） -->
     <button
       class="hud-icon-btn settings-trigger"
@@ -1897,7 +1897,10 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div class="blind-select-right">
-              <span class="chip-tag gold">$ {{ money }}</span>
+              <span class="chip-tag gold money-tag">
+                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon" />
+                {{ money }}
+              </span>
               <span class="blind-select-progress">{{ currentBlindProgress }} 已完成</span>
             </div>
           </div>
@@ -1968,7 +1971,10 @@ onBeforeUnmount(() => {
           <div class="shop-top">
             <h2 class="shop-title">商店</h2>
             <div class="shop-top-right">
-              <span class="chip-tag gold">$ {{ money }}</span>
+              <span class="chip-tag gold money-tag">
+                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon" />
+                {{ money }}
+              </span>
               <button
                 @click="rerollShop"
                 :disabled="shopRefreshState.disabled"
@@ -2142,8 +2148,11 @@ onBeforeUnmount(() => {
               <span class="hud-meta-val">{{ drawPileCount }}/52</span>
             </div>
             <div class="hud-meta-item">
-              <span class="hud-meta-label">金钱</span>
-              <span class="hud-meta-val">${{ money }}</span>
+              <span class="hud-meta-label">
+                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon dim" />
+                金钱
+              </span>
+              <span class="hud-meta-val gold">${{ money }}</span>
             </div>
           </div>
 
@@ -2351,6 +2360,11 @@ onBeforeUnmount(() => {
 /* =====================================================
    CSS Variables & Global
    ===================================================== */
+/* v1.8.0：AI 托管模式激活时，顶部留出空间给 ai-pilot-header（约 64px），避免遮挡 HUD */
+.balatro-shell.pilot-active {
+  padding-top: 64px;
+}
+
 .balatro-shell {
   --bg: #082818;
   --felt-deep: #082818;
@@ -2662,6 +2676,29 @@ onBeforeUnmount(() => {
   letter-spacing: 1px;
 }
 .chip-tag.gold   { background: rgba(255,209,102,.15); color: var(--gold); border: 1px solid rgba(255,209,102,.3); }
+
+/* v1.8.0：内联 SVG 图标通用样式 — 白色 SVG 通过 filter 着金色 */
+.inline-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin-right: 4px;
+  /* 把白色 SVG 染成金色（#ffd166） */
+  filter: brightness(0) saturate(100%) invert(86%) sepia(43%) saturate(486%) hue-rotate(338deg) brightness(102%) contrast(102%);
+  display: inline-block;
+}
+.inline-icon.dim {
+  opacity: 0.7;
+  margin-right: 3px;
+}
+.money-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.hud-meta-val.gold {
+  color: var(--gold);
+}
 .chip-tag.muted  { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid rgba(255,255,255,.08); }
 .chip-tag.purple { background: rgba(179,136,255,.15); color: var(--purple); border: 1px solid rgba(179,136,255,.3); }
 
