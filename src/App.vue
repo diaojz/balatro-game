@@ -1862,7 +1862,7 @@ onBeforeUnmount(() => {
       data-no-sfx="true"
       aria-label="设置"
       @click="openSettings"
-    >⚙</button>
+    ><img src="/assets/icons/lorc_cog.svg" alt="" class="btn-icon-svg" /></button>
     <SettingsPanel :open="settingsOpen" @close="closeSettings" />
 
     <!-- 牌型弹出 banner -->
@@ -1971,7 +1971,7 @@ onBeforeUnmount(() => {
                   >
                     <div class="deck-card-face">
                       <div class="deck-card-stripe"></div>
-                      <span v-if="!option.implemented" class="deck-card-lock">🔒</span>
+                      <img v-if="!option.implemented" src="/assets/icons/lorc_padlock.svg" alt="锁定" class="deck-card-lock-svg" />
                       <span v-else-if="selectedDeckOption === option.key" class="deck-card-check">✓</span>
                     </div>
                     <div class="deck-card-info">
@@ -2014,7 +2014,8 @@ onBeforeUnmount(() => {
                 :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
                 @click="startSoloPilot"
               >
-                🔮 AI 托管模式
+                <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="btn-icon-svg" />
+                AI 托管模式
               </button>
               <!-- v3.2.0 B7：双 AI 对战入口（v3.2.0 降级版：按钮存在，完整双路留 v3.3.0） -->
               <button
@@ -3222,11 +3223,28 @@ onBeforeUnmount(() => {
     repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.2) 0 4px, transparent 4px 12px);
   opacity: 0.6;
 }
-.deck-card-lock {
+.deck-card-lock,
+.deck-card-lock-svg {
   position: relative;
   font-size: 22px;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
   z-index: 1;
+}
+.deck-card-lock-svg {
+  width: 28px;
+  height: 28px;
+  /* 白色 SVG 变浅灰 */
+  filter: brightness(0) invert(0.85) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
+}
+
+/* v1.9.0：按钮内联 SVG 图标通用样式 */
+.btn-icon-svg {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.18em;
+  margin-right: 4px;
+  filter: brightness(0) invert(1);  /* 白色 */
+  display: inline-block;
 }
 .deck-card-check {
   position: relative;

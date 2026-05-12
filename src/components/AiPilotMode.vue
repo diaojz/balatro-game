@@ -317,7 +317,7 @@ function clearVisibleLog() {
         <div class="thinking-bubble" :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }">
           <div class="thinking-orb-wrap">
             <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
-              🔮
+              <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="thinking-orb-svg" />
             </div>
             <!-- 粒子环（thinking 状态时渲染） -->
             <div v-if="latestTickA?.kind === 'thinking'" class="thinking-particles">
@@ -661,6 +661,12 @@ function clearVisibleLog() {
   line-height: 1;
   transition: transform 0.3s, filter 0.3s;
   user-select: none;
+}
+/* v1.9.0：水晶球 SVG 图标，替换 🔮 emoji */
+.thinking-orb-svg {
+  width: 32px;
+  height: 32px;
+  filter: brightness(0) invert(1) drop-shadow(0 0 6px rgba(255, 209, 102, 0.8));
 }
 
 /* thinking 时水晶球缓慢脉冲 */

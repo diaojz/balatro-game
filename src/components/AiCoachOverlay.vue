@@ -231,7 +231,7 @@ onUnmounted(() => {
       :title="enabled ? '请教 AI 教练' : '点设置启用 AI 教练'"
       @click="ask"
     >
-      <span class="ai-orb-core">🔮</span>
+      <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="ai-orb-core-svg" />
       <span ref="particleRef" class="ai-orb-particles" aria-hidden="true">
         <span class="dot" v-for="n in 6" :key="n" />
       </span>
@@ -286,6 +286,13 @@ onUnmounted(() => {
   font-size: 22px;
   line-height: 1;
   pointer-events: none;
+}
+/* v1.9.0：水晶球图标替换 🔮 emoji */
+.ai-orb-core-svg {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 209, 102, 0.8));
 }
 .ai-orb-particles {
   position: absolute; inset: -8px;
