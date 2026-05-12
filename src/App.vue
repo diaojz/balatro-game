@@ -37,11 +37,132 @@ const RUN_PHASES = {
   GAME_OVER: 'game-over'
 }
 
+// v1.9.0：完整对齐 Balatro 原作 15 个 Deck
+// modifier 字段会被 applyDeckModifier 注入到游戏初始化里
+// implemented=false 的 Deck 仅作视觉占位（点击不可选），待后续版本接入复杂系统（塔罗/幽灵/相位）
 const STARTER_DECK_OPTIONS = [
+  // ===== 基础 5 色 Deck（全部实装）=====
   {
-    key: 'standard-52',
-    name: '标准牌组',
-    description: '最小可用起始牌组，使用完整 52 张扑克牌。'
+    key: 'red-deck',
+    name: '红色牌组',
+    description: '每回合 +1 弃牌',
+    color: '#d6234a',
+    modifier: { extraDiscardsPerRound: 1 },
+    implemented: true
+  },
+  {
+    key: 'blue-deck',
+    name: '蓝色牌组',
+    description: '每回合 +1 出牌',
+    color: '#3a7bd5',
+    modifier: { extraHandsPerRound: 1 },
+    implemented: true
+  },
+  {
+    key: 'yellow-deck',
+    name: '黄色牌组',
+    description: '起始 +$10',
+    color: '#ffc857',
+    modifier: { extraStartMoney: 10 },
+    implemented: true
+  },
+  {
+    key: 'green-deck',
+    name: '绿色牌组',
+    description: '回合结束每剩 1 手牌 +$2，每剩 1 弃牌 +$1（无利息）',
+    color: '#62d18b',
+    modifier: { greenRoundBonus: true },
+    implemented: true
+  },
+  {
+    key: 'black-deck',
+    name: '黑色牌组',
+    description: '+1 Joker 槽，每回合 -1 出牌',
+    color: '#2a1c33',
+    modifier: { extraJokerSlots: 1, extraHandsPerRound: -1 },
+    implemented: true
+  },
+  // ===== 由色 Deck 通关解锁（暂未实装，需要塔罗/幽灵/相位系统）=====
+  {
+    key: 'magic-deck',
+    name: '魔法牌组',
+    description: '起始携带 2 张愚者塔罗 + 水晶球券',
+    color: '#7c3aed',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'nebula-deck',
+    name: '星云牌组',
+    description: '起始携带望远镜券，-1 消耗品槽',
+    color: '#1e3a8a',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'ghost-deck',
+    name: '幽灵牌组',
+    description: '商店出现幽灵牌，起始 1 张诅咒',
+    color: '#9ca3af',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'abandoned-deck',
+    name: '废弃牌组',
+    description: '起始牌组无任何 J/Q/K',
+    color: '#92400e',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'checkered-deck',
+    name: '棋盘牌组',
+    description: '起始 26 张 ♠ + 26 张 ♥',
+    color: '#525252',
+    modifier: {},
+    implemented: false
+  },
+  // ===== 通过更高难度解锁（暂未实装）=====
+  {
+    key: 'zodiac-deck',
+    name: '黄道牌组',
+    description: '起始 3 张商人券',
+    color: '#0891b2',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'painted-deck',
+    name: '涂画牌组',
+    description: '+2 手牌容量，-1 Joker 槽',
+    color: '#ea580c',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'anaglyph-deck',
+    name: '浮雕牌组',
+    description: '每击败 Boss 后获得 1 个双重标签',
+    color: '#dc2626',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'plasma-deck',
+    name: '等离子牌组',
+    description: '筹码与倍率平衡计算，盲注 ×2',
+    color: '#06b6d4',
+    modifier: {},
+    implemented: false
+  },
+  {
+    key: 'erratic-deck',
+    name: '混沌牌组',
+    description: '所有点数与花色完全随机',
+    color: '#a855f7',
+    modifier: {},
+    implemented: false
   }
 ]
 
@@ -687,7 +808,9 @@ async function requestBlindAdviceNow() {
 // 游戏核心 ref（deck/discardPile/hand 等 15 个）已通过 createGameState() 解构，此处不再重复声明。
 const gameWon = ref(false)
 const showPlayedCards = ref(false)
-const maxJokers = 5
+// v1.9.0：maxJokers 由常量改 computed —— 黑色牌组 +1，未来可扩展
+const BASE_MAX_JOKERS = 5
+const maxJokers = computed(() => BASE_MAX_JOKERS + (deckModifier.value.extraJokerSlots ?? 0))
 const HAND_SIZE = 8
 
 const effectiveHandSize = computed(() => {
@@ -744,6 +867,8 @@ const selectedBlindId = ref(null)
 const selectedDeckConfig = computed(
   () => STARTER_DECK_OPTIONS.find(option => option.key === selectedDeckOption.value) ?? STARTER_DECK_OPTIONS[0]
 )
+// v1.9.0：当前牌组的 modifier 快照（注入到游戏初始化逻辑）
+const deckModifier = computed(() => selectedDeckConfig.value?.modifier ?? {})
 const selectedDifficultyConfig = computed(
   () => DIFFICULTY_OPTIONS.find(option => option.key === selectedDifficultyOption.value) ?? DIFFICULTY_OPTIONS[0]
 )
@@ -805,7 +930,7 @@ const selectedScorePreview = computed(() => {
 const drawPileCount = computed(() => deck.value.length)
 const discardPileCount = computed(() => discardPile.value.length)
 const activeConsumable = computed(() => ownedJokers.value[0] || null)
-const jokerSlotsLeft = computed(() => Math.max(0, maxJokers - ownedJokers.value.length))
+const jokerSlotsLeft = computed(() => Math.max(0, maxJokers.value - ownedJokers.value.length))
 const buildSummary = computed(() => {
   const rarityCounter = ownedJokers.value.reduce((counter, joker) => {
     const rarity = joker.rarity || '普通'
@@ -834,7 +959,7 @@ const shopOfferStates = computed(() =>
   // v3.1.0 A4：加入 shopJokerId 以供 shopRecommendedKindOf 使用
   shopJokers.value.map((joker, i) => {
     const canAfford = money.value >= joker.price
-    const hasSlot = ownedJokers.value.length < maxJokers
+    const hasSlot = ownedJokers.value.length < maxJokers.value
     let status = 'available'
     let statusLabel = '可购买'
     let detail = '满足条件，可直接加入构筑'
@@ -870,7 +995,7 @@ const shopSummaryCards = computed(() => [
   },
   {
     label: 'Joker 槽位',
-    value: `${ownedJokers.value.length}/${maxJokers}`,
+    value: `${ownedJokers.value.length}/${maxJokers.value}`,
     tone: jokerSlotsLeft.value > 0 ? 'mint' : 'slate',
     hint: jokerSlotsLeft.value > 0 ? `剩余 ${jokerSlotsLeft.value} 个空槽` : '需要出售后再购入'
   },
@@ -929,11 +1054,8 @@ function showToastMessage(message, type = 'info') {
 }
 
 function initDeckBySelection() {
-  if (selectedDeckConfig.value.key === 'standard-52') {
-    deck.value = createDeck()
-    return
-  }
-
+  // v1.9.0：所有 15 个 Deck 当前都基于标准 52 张牌组初始化；
+  // 复杂 Deck（Abandoned/Checkered/Erratic 等）将在后续版本接入特殊牌组生成器。
   deck.value = createDeck()
 }
 
@@ -942,9 +1064,11 @@ function initGame() {
   discardPile.value = []
   currentBlind.value = 0
   totalScore.value = 0
-  handsLeft.value = BLINDS[0].hands ?? 4
-  discardsLeft.value = BLINDS[0].discards ?? 3
-  money.value = selectedDifficultyConfig.value.startingMoney
+  // v1.9.0：注入 Deck modifier —— 蓝 +1 出 / 红 +1 弃 / 黑 -1 出 / 黄 +$10
+  const mod = deckModifier.value
+  handsLeft.value = Math.max(1, (BLINDS[0].hands ?? 4) + (mod.extraHandsPerRound ?? 0))
+  discardsLeft.value = Math.max(0, (BLINDS[0].discards ?? 3) + (mod.extraDiscardsPerRound ?? 0))
+  money.value = selectedDifficultyConfig.value.startingMoney + (mod.extraStartMoney ?? 0)
   gameWon.value = false
   ownedJokers.value = []
   playedCards.value = []
@@ -1482,9 +1606,16 @@ function discardCards() {
 }
 
 function passBlind() {
-  money.value += blind.value.reward
+  // v1.9.0：绿色牌组 — 每剩 1 手牌 +$2、每剩 1 弃牌 +$1
+  const mod = deckModifier.value
+  let greenBonus = 0
+  if (mod.greenRoundBonus) {
+    greenBonus = handsLeft.value * 2 + discardsLeft.value * 1
+  }
+  money.value += blind.value.reward + greenBonus
   completedBlindIds.value = [...new Set([...completedBlindIds.value, blind.value.id])]
-  showToastMessage(`通过 ${blind.value.name}！获得 $${blind.value.reward}`, 'success')
+  const bonusText = greenBonus > 0 ? `（含绿牌组奖金 +$${greenBonus}）` : ''
+  showToastMessage(`通过 ${blind.value.name}！获得 $${blind.value.reward + greenBonus}${bonusText}`, 'success')
 
   if (blind.value.type === 'boss') {
     audio.playSfx('bossDefeat')
@@ -1518,8 +1649,10 @@ function failBlind() {
 
 function resetRound() {
   totalScore.value = 0
-  handsLeft.value = blind.value.hands ?? 4
-  discardsLeft.value = blind.value.discards ?? 3
+  // v1.9.0：每回合手数 / 弃牌也受 Deck modifier 影响
+  const mod = deckModifier.value
+  handsLeft.value = Math.max(1, (blind.value.hands ?? 4) + (mod.extraHandsPerRound ?? 0))
+  discardsLeft.value = Math.max(0, (blind.value.discards ?? 3) + (mod.extraDiscardsPerRound ?? 0))
   lastPlayedHand.value = null
   lastScore.value = 0
   playedCards.value = []
@@ -1589,7 +1722,7 @@ function buyJoker(joker) {
     return
   }
 
-  if (ownedJokers.value.length >= maxJokers) {
+  if (ownedJokers.value.length >= maxJokers.value) {
     showToastMessage('小丑牌槽已满（最多 5 个）', 'warning')
     return
   }
@@ -1821,18 +1954,29 @@ onBeforeUnmount(() => {
             <div class="setup-options-row">
               <section class="setup-section">
                 <p class="setup-section-label">牌组</p>
-                <div class="setup-option-list">
+                <!-- v1.9.0：15 张 Balatro Deck 网格 — 每张专属色，未实装显示锁定态 -->
+                <div class="deck-grid">
                   <button
                     v-for="option in STARTER_DECK_OPTIONS"
                     :key="option.key"
-                    @click="selectedDeckOption = option.key"
-                    class="setup-option-card"
-                    :class="{ active: selectedDeckOption === option.key }"
+                    @click="option.implemented && (selectedDeckOption = option.key)"
+                    class="deck-card"
+                    :class="{
+                      active: selectedDeckOption === option.key,
+                      locked: !option.implemented
+                    }"
+                    :style="{ '--deck-color': option.color }"
                     :title="option.description"
+                    :disabled="!option.implemented"
                   >
-                    <div class="setup-option-head">
-                      <h3>{{ option.name }}</h3>
-                      <span class="setup-option-badge">{{ selectedDeckOption === option.key ? '已选' : '' }}</span>
+                    <div class="deck-card-face">
+                      <div class="deck-card-stripe"></div>
+                      <span v-if="!option.implemented" class="deck-card-lock">🔒</span>
+                      <span v-else-if="selectedDeckOption === option.key" class="deck-card-check">✓</span>
+                    </div>
+                    <div class="deck-card-info">
+                      <h3 class="deck-card-name">{{ option.name }}</h3>
+                      <p class="deck-card-desc">{{ option.description }}</p>
                     </div>
                   </button>
                 </div>
@@ -3018,6 +3162,108 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #3a2b0a, #1f1505);
   border-color: #ffd166;
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 209, 102, 0.35);
+}
+
+/* ============================================================
+   v1.9.0：15 个 Balatro Deck 网格
+   ============================================================ */
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.deck-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #150820;
+  border: 2px solid #0a0410;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.15s ease;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.deck-card:not(.locked):hover {
+  transform: translateY(-2px);
+  border-color: var(--deck-color);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.5), 0 0 14px var(--deck-color);
+}
+.deck-card.active {
+  border-color: var(--deck-color);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45), 0 0 0 2px #ffd166, 0 0 18px var(--deck-color);
+}
+.deck-card.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.deck-card-face {
+  position: relative;
+  height: 76px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--deck-color) 0%, #000 140%);
+  border: 2px solid rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 -8px 12px rgba(0, 0, 0, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.deck-card-stripe {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.08) 0 4px, transparent 4px 12px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.2) 0 4px, transparent 4px 12px);
+  opacity: 0.6;
+}
+.deck-card-lock {
+  position: relative;
+  font-size: 22px;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
+  z-index: 1;
+}
+.deck-card-check {
+  position: relative;
+  font-size: 26px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+.deck-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 52px;
+}
+.deck-card-name {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: var(--deck-color);
+  margin: 0;
+  line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+.deck-card-desc {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-dim, #b09cd5);
+  margin: 0;
+}
+
+/* 响应式：窄屏 3 列 */
+@media (max-width: 900px) {
+  .deck-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .deck-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .setup-compact .setup-option-head { gap: 8px; }
 .setup-compact .setup-option-head h3 {
