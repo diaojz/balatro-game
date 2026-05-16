@@ -4,6 +4,8 @@ import gsap from 'gsap'
 import * as ai from '../utils/ai-coach.js'
 import * as audio from '../utils/audio.js'
 
+const BASE_URL = import.meta.env.BASE_URL
+
 const props = defineProps({
   // v3.0.0 已有：是否显示水晶球
   visible: { type: Boolean, default: true },
@@ -231,7 +233,7 @@ onUnmounted(() => {
       :title="enabled ? '请教 AI 教练' : '点设置启用 AI 教练'"
       @click="ask"
     >
-      <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="ai-orb-core-svg" />
+      <img :src="`${BASE_URL}assets/icons/lorc_crystal-ball.svg`" alt="" class="ai-orb-core-svg" />
       <span ref="particleRef" class="ai-orb-particles" aria-hidden="true">
         <span class="dot" v-for="n in 6" :key="n" />
       </span>

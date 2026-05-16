@@ -12,6 +12,8 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import * as audio from '../utils/audio.js'
 
+const BASE_URL = import.meta.env.BASE_URL
+
 // ──────────────────────────────────────────────────────────────────────────
 // Props（v3.2.0 文档 7.2 锁定）
 // ──────────────────────────────────────────────────────────────────────────
@@ -317,7 +319,7 @@ function clearVisibleLog() {
         <div class="thinking-bubble" :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }">
           <div class="thinking-orb-wrap">
             <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
-              <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="thinking-orb-svg" />
+              <img :src="`${BASE_URL}assets/icons/lorc_crystal-ball.svg`" alt="" class="thinking-orb-svg" />
             </div>
             <!-- 粒子环（thinking 状态时渲染） -->
             <div v-if="latestTickA?.kind === 'thinking'" class="thinking-particles">

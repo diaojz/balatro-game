@@ -1,5 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+
+const BASE_URL = import.meta.env.BASE_URL
 import { createDeck, identifyHand } from './utils/poker.js'
 import { calculateScore, buildScoreSequence } from './utils/scoring.js'
 import { BLINDS, TOTAL_ANTES } from './config/blinds.js'
@@ -1862,7 +1864,7 @@ onBeforeUnmount(() => {
       data-no-sfx="true"
       aria-label="设置"
       @click="openSettings"
-    ><img src="/assets/icons/lorc_cog.svg" alt="" class="btn-icon-svg" /></button>
+    ><img :src="`${BASE_URL}assets/icons/lorc_cog.svg`" alt="" class="btn-icon-svg" /></button>
     <SettingsPanel :open="settingsOpen" @close="closeSettings" />
 
     <!-- 牌型弹出 banner -->
@@ -1963,7 +1965,7 @@ onBeforeUnmount(() => {
                 :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
                 @click="startSoloPilot"
               >
-                <img src="/assets/icons/lorc_crystal-ball.svg" alt="" class="btn-icon-svg" />
+                <img :src="`${BASE_URL}assets/icons/lorc_crystal-ball.svg`" alt="" class="btn-icon-svg" />
                 AI 托管模式
               </button>
               <!-- v3.2.0 B7：双 AI 对战入口（v3.2.0 降级版：按钮存在，完整双路留 v3.3.0） -->
@@ -1992,7 +1994,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="blind-select-right">
               <span class="chip-tag gold money-tag">
-                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon" />
+                <img :src="`${BASE_URL}assets/icons/delapouite_coins.svg`" alt="" class="inline-icon" />
                 {{ money }}
               </span>
               <span class="blind-select-progress">{{ currentBlindProgress }} 已完成</span>
@@ -2066,7 +2068,7 @@ onBeforeUnmount(() => {
             <h2 class="shop-title">商店</h2>
             <div class="shop-top-right">
               <span class="chip-tag gold money-tag">
-                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon" />
+                <img :src="`${BASE_URL}assets/icons/delapouite_coins.svg`" alt="" class="inline-icon" />
                 {{ money }}
               </span>
               <button
@@ -2243,7 +2245,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="hud-meta-item">
               <span class="hud-meta-label">
-                <img src="/assets/icons/delapouite_coins.svg" alt="" class="inline-icon dim" />
+                <img :src="`${BASE_URL}assets/icons/delapouite_coins.svg`" alt="" class="inline-icon dim" />
                 金钱
               </span>
               <span class="hud-meta-val gold">${{ money }}</span>
