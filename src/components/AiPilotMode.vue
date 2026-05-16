@@ -726,7 +726,7 @@ function clearVisibleLog() {
 }
 /* 用更高特异性选择器覆盖原 .thinking-text-wrap 的 column 布局 */
 .thinking-bubble--compact .thinking-text-wrap {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: row;
