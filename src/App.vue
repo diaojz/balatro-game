@@ -1951,57 +1951,6 @@ onBeforeUnmount(() => {
           </p>
 
           <div class="setup-options">
-            <div class="setup-options-row">
-              <section class="setup-section">
-                <p class="setup-section-label">牌组</p>
-                <!-- v1.9.0：15 张 Balatro Deck 网格 — 每张专属色，未实装显示锁定态 -->
-                <div class="deck-grid">
-                  <button
-                    v-for="option in STARTER_DECK_OPTIONS"
-                    :key="option.key"
-                    @click="option.implemented && (selectedDeckOption = option.key)"
-                    class="deck-card"
-                    :class="{
-                      active: selectedDeckOption === option.key,
-                      locked: !option.implemented
-                    }"
-                    :style="{ '--deck-color': option.color }"
-                    :title="option.description"
-                    :disabled="!option.implemented"
-                  >
-                    <div class="deck-card-face">
-                      <div class="deck-card-stripe"></div>
-                      <img v-if="!option.implemented" src="/assets/icons/lorc_padlock.svg" alt="锁定" class="deck-card-lock-svg" />
-                      <span v-else-if="selectedDeckOption === option.key" class="deck-card-check">✓</span>
-                    </div>
-                    <div class="deck-card-info">
-                      <h3 class="deck-card-name">{{ option.name }}</h3>
-                      <p class="deck-card-desc">{{ option.description }}</p>
-                    </div>
-                  </button>
-                </div>
-              </section>
-
-              <section class="setup-section">
-                <p class="setup-section-label">难度</p>
-                <div class="setup-option-list">
-                  <button
-                    v-for="option in DIFFICULTY_OPTIONS"
-                    :key="option.key"
-                    @click="selectedDifficultyOption = option.key"
-                    class="setup-option-card"
-                    :class="{ active: selectedDifficultyOption === option.key }"
-                    :title="option.description"
-                  >
-                    <div class="setup-option-head">
-                      <h3>{{ option.name }}</h3>
-                      <span class="setup-option-badge">${{ option.startingMoney }}</span>
-                    </div>
-                  </button>
-                </div>
-              </section>
-            </div>
-
             <button @click="startRun" class="btn-primary-lg btn-primary-hero">
               开始游戏
             </button>
