@@ -692,20 +692,21 @@ function clearVisibleLog() {
   display: block;
 }
 
-/* solo 模式：气泡塞进顶栏中央的紧凑样式 */
+/* solo 模式：气泡塞进顶栏中央的紧凑样式（整体内容居中显示） */
 .thinking-bubble--compact {
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 720px;
   margin: 0 16px;
-  padding: 6px 14px;
+  padding: 6px 18px;
   gap: 10px;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.25);
   border-radius: 999px;
 }
 .thinking-orb-wrap--compact {
   width: 28px;
   height: 28px;
+  flex: 0 0 auto;
 }
 .thinking-orb-svg--compact {
   width: 24px;
@@ -717,8 +718,9 @@ function clearVisibleLog() {
     inset 1px 1px 3px rgba(255, 255, 255, 0.85);
 }
 .thinking-text-wrap--compact {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 640px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -731,7 +733,6 @@ function clearVisibleLog() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1 1 auto;
   min-width: 0;
 }
 
