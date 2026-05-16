@@ -319,7 +319,7 @@ function clearVisibleLog() {
         <div class="thinking-bubble" :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }">
           <div class="thinking-orb-wrap">
             <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
-              <span class="thinking-orb-svg" aria-hidden="true"></span>
+              <span class="thinking-orb-svg" aria-hidden="true"><img :src="`${BASE_URL}assets/icons/deepseek.svg`" alt="" /></span>
             </div>
             <!-- 粒子环（thinking 状态时渲染） -->
             <div v-if="latestTickA?.kind === 'thinking'" class="thinking-particles">
@@ -664,37 +664,28 @@ function clearVisibleLog() {
   transition: transform 0.3s, filter 0.3s;
   user-select: none;
 }
-/* v1.9.x：CSS 自绘紫水晶发光球，替换 game-icons 水晶球 SVG */
+/* v1.9.x：DeepSeek 小机器人头像（白蓝渐变底 + 蓝鲸 logo + 蓝色外发光） */
 .thinking-orb-svg {
   position: relative;
-  display: inline-block;
-  width: 32px;
-  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 28%,
-      #ffffff 0%,
-      #e7d2ff 14%,
-      #b58dff 38%,
-      #7a3ff0 68%,
-      #361a7a 100%);
+    radial-gradient(circle at 35% 28%, #ffffff 0%, #dbe6ff 55%, #a8bbf5 100%);
   box-shadow:
-    0 0 12px 3px rgba(180, 130, 255, 0.9),
-    0 0 28px 6px rgba(120, 60, 240, 0.55),
-    inset -3px -4px 8px rgba(0, 0, 0, 0.5),
-    inset 2px 3px 5px rgba(255, 255, 255, 0.5);
+    0 0 12px 3px rgba(77, 107, 254, 0.9),
+    0 0 28px 6px rgba(77, 107, 254, 0.5),
+    inset -3px -4px 7px rgba(60, 80, 160, 0.4),
+    inset 2px 3px 5px rgba(255, 255, 255, 0.9);
 }
-.thinking-orb-svg::after {
-  content: '';
-  position: absolute;
-  top: 14%;
-  left: 22%;
-  width: 32%;
-  height: 24%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.92);
-  filter: blur(1.2px);
-  pointer-events: none;
+.thinking-orb-svg img {
+  width: 62%;
+  height: 62%;
+  object-fit: contain;
+  display: block;
 }
 
 /* thinking 时水晶球缓慢脉冲 */
