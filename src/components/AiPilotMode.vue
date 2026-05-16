@@ -724,15 +724,17 @@ function clearVisibleLog() {
     inset -1px -2px 4px rgba(60, 80, 160, 0.35),
     inset 1px 1px 3px rgba(255, 255, 255, 0.85);
 }
-.thinking-text-wrap--compact {
-  flex: 0 1 auto;
+/* 用更高特异性选择器覆盖原 .thinking-text-wrap 的 column 布局 */
+.thinking-bubble--compact .thinking-text-wrap {
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 640px;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 10px;
+  overflow: hidden;
 }
-.thinking-text--compact {
+.thinking-bubble--compact .thinking-text {
   margin: 0;
   font-size: 13px;
   line-height: 1.4;
@@ -740,7 +742,12 @@ function clearVisibleLog() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: normal;
+  flex: 1 1 auto;
   min-width: 0;
+}
+.thinking-bubble--compact .provider-mini {
+  flex: 0 0 auto;
 }
 
 /* thinking 时水晶球缓慢脉冲 */
