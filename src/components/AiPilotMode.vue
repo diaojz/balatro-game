@@ -692,16 +692,23 @@ function clearVisibleLog() {
   display: block;
 }
 
-/* solo 模式：气泡塞进顶栏中央的紧凑样式（整体内容居中显示） */
+/* solo 模式：气泡绝对居中于顶栏（不受左右两侧元素宽度影响） */
 .thinking-bubble--compact {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0 16px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(540px, calc(100% - 360px));
   padding: 6px 18px;
   gap: 10px;
   justify-content: center;
   background: rgba(0, 0, 0, 0.25);
   border-radius: 999px;
+  pointer-events: none;
+  z-index: 1;
+}
+.thinking-bubble--compact[title] {
+  pointer-events: auto;
 }
 .thinking-orb-wrap--compact {
   width: 28px;
