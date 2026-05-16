@@ -747,7 +747,7 @@ function clearVisibleLog() {
   min-width: 0;
 }
 .thinking-bubble--compact .provider-mini {
-  flex: 0 0 auto;
+  display: none;
 }
 
 /* thinking 时水晶球缓慢脉冲 */
