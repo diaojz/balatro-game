@@ -298,6 +298,32 @@ function clearVisibleLog() {
 
         </div>
 
+        <!-- solo 模式：思考气泡塞进顶栏中央，避免遮挡牌桌 HUD -->
+        <div
+          v-if="mode !== 'duel'"
+          class="thinking-bubble thinking-bubble--compact"
+          :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }"
+          :title="bubbleTextOf(latestTickA)"
+        >
+          <div class="thinking-orb-wrap thinking-orb-wrap--compact">
+            <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
+              <span class="thinking-orb-svg thinking-orb-svg--compact" aria-hidden="true"><img :src="`${BASE_URL}assets/icons/deepseek.svg`" alt="" /></span>
+            </div>
+            <div v-if="latestTickA?.kind === 'thinking'" class="thinking-particles">
+              <span
+                v-for="n in 8"
+                :key="n"
+                class="particle"
+                :style="{ '--i': n }"
+              />
+            </div>
+          </div>
+          <div class="thinking-text-wrap thinking-text-wrap--compact">
+            <span v-if="providerLabelA" class="provider-mini">{{ providerLabelA }}</span>
+            <p class="thinking-text thinking-text--compact">{{ bubbleTextOf(latestTickA) }}</p>
+          </div>
+        </div>
+
         <!-- 中止按钮 -->
         <button
           class="ai-pilot-abort-btn"
@@ -310,32 +336,10 @@ function clearVisibleLog() {
       </header>
 
       <!-- ────────────────────────────────────────────────────────────────
-           中央思考气泡区（ThinkingBubble 内联实现）
-           duel 模式时左右各一个气泡
+           中央思考气泡区（仅 duel 模式渲染，左右两个气泡）
+           solo 模式的 A 侧气泡已挪到顶栏中央，避免遮挡牌桌
            ──────────────────────────────────────────────────────────────── -->
-      <section class="ai-pilot-thinking" :class="{ 'is-duel': mode === 'duel' }">
-
-        <!-- A 侧气泡（ThinkingBubble，v3.2.0 文档 7.4 锁定结构） -->
-        <div class="thinking-bubble" :class="{ 'is-thinking': latestTickA?.kind === 'thinking' }">
-          <div class="thinking-orb-wrap">
-            <div class="thinking-orb" :class="{ 'orb-spin': latestTickA?.kind === 'thinking' }">
-              <span class="thinking-orb-svg" aria-hidden="true"><img :src="`${BASE_URL}assets/icons/deepseek.svg`" alt="" /></span>
-            </div>
-            <!-- 粒子环（thinking 状态时渲染） -->
-            <div v-if="latestTickA?.kind === 'thinking'" class="thinking-particles">
-              <span
-                v-for="n in 8"
-                :key="n"
-                class="particle"
-                :style="{ '--i': n }"
-              />
-            </div>
-          </div>
-          <div class="thinking-text-wrap">
-            <span v-if="providerLabelA" class="provider-mini">{{ providerLabelA }}</span>
-            <p class="thinking-text">{{ bubbleTextOf(latestTickA) }}</p>
-          </div>
-        </div>
+      <section v-if="mode === 'duel'" class="ai-pilot-thinking is-duel">
 
         <!-- B 侧气泡（duel 模式才渲染） -->
         <div
@@ -686,6 +690,49 @@ function clearVisibleLog() {
   height: 62%;
   object-fit: contain;
   display: block;
+}
+
+/* solo 模式：气泡塞进顶栏中央的紧凑样式 */
+.thinking-bubble--compact {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 720px;
+  margin: 0 16px;
+  padding: 6px 14px;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 999px;
+}
+.thinking-orb-wrap--compact {
+  width: 28px;
+  height: 28px;
+}
+.thinking-orb-svg--compact {
+  width: 24px;
+  height: 24px;
+  box-shadow:
+    0 0 6px 1px rgba(77, 107, 254, 0.85),
+    0 0 14px 3px rgba(77, 107, 254, 0.4),
+    inset -1px -2px 4px rgba(60, 80, 160, 0.35),
+    inset 1px 1px 3px rgba(255, 255, 255, 0.85);
+}
+.thinking-text-wrap--compact {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.thinking-text--compact {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* thinking 时水晶球缓慢脉冲 */
