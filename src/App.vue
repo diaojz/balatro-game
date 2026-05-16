@@ -1965,7 +1965,7 @@ onBeforeUnmount(() => {
                 :title="soloPilotDisabledReason || 'AI 自动完成 blind-select → battle → shop 全循环'"
                 @click="startSoloPilot"
               >
-                <img :src="`${BASE_URL}assets/icons/lorc_crystal-ball.svg`" alt="" class="btn-icon-svg" />
+                <span class="btn-ai-orb" aria-hidden="true"></span>
                 AI 托管模式
               </button>
               <!-- v3.2.0 B7：双 AI 对战入口（v3.2.0 降级版：按钮存在，完整双路留 v3.3.0） -->
@@ -3186,6 +3186,41 @@ onBeforeUnmount(() => {
   height: 28px;
   /* 白色 SVG 变浅灰 */
   filter: brightness(0) invert(0.85) drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5));
+}
+
+/* v1.9.x：按钮内联紫水晶发光球（替换水晶球 SVG） */
+.btn-ai-orb {
+  position: relative;
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.22em;
+  margin-right: 6px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%,
+      #ffffff 0%,
+      #e7d2ff 14%,
+      #b58dff 38%,
+      #7a3ff0 68%,
+      #361a7a 100%);
+  box-shadow:
+    0 0 6px 1px rgba(180, 130, 255, 0.85),
+    0 0 14px 3px rgba(120, 60, 240, 0.5),
+    inset -1px -2px 4px rgba(0, 0, 0, 0.45),
+    inset 1px 1px 3px rgba(255, 255, 255, 0.4);
+}
+.btn-ai-orb::after {
+  content: '';
+  position: absolute;
+  top: 16%;
+  left: 22%;
+  width: 30%;
+  height: 22%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  filter: blur(0.8px);
+  pointer-events: none;
 }
 
 /* v1.9.0：按钮内联 SVG 图标通用样式 */

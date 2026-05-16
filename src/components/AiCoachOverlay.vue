@@ -233,7 +233,7 @@ onUnmounted(() => {
       :title="enabled ? '请教 AI 教练' : '点设置启用 AI 教练'"
       @click="ask"
     >
-      <img :src="`${BASE_URL}assets/icons/lorc_crystal-ball.svg`" alt="" class="ai-orb-core-svg" />
+      <span class="ai-orb-core-svg" aria-hidden="true"></span>
       <span ref="particleRef" class="ai-orb-particles" aria-hidden="true">
         <span class="dot" v-for="n in 6" :key="n" />
       </span>
@@ -291,10 +291,36 @@ onUnmounted(() => {
 }
 /* v1.9.0：水晶球图标替换 🔮 emoji */
 .ai-orb-core-svg {
+  position: relative;
+  display: inline-block;
   width: 24px;
   height: 24px;
+  border-radius: 50%;
   pointer-events: none;
-  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 209, 102, 0.8));
+  background:
+    radial-gradient(circle at 35% 28%,
+      #ffffff 0%,
+      #e7d2ff 14%,
+      #b58dff 38%,
+      #7a3ff0 68%,
+      #361a7a 100%);
+  box-shadow:
+    0 0 10px 2px rgba(180, 130, 255, 0.85),
+    0 0 22px 4px rgba(120, 60, 240, 0.55),
+    inset -2px -3px 6px rgba(0, 0, 0, 0.5),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.45);
+}
+.ai-orb-core-svg::after {
+  content: '';
+  position: absolute;
+  top: 16%;
+  left: 22%;
+  width: 30%;
+  height: 22%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  filter: blur(1px);
+  pointer-events: none;
 }
 .ai-orb-particles {
   position: absolute; inset: -8px;
