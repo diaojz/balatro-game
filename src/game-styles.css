@@ -1,4 +1,4 @@
-/* 全局样式 — 深色主题 */
+/* 全局样式 — 蓝色水纹主题 */
 * {
   margin: 0;
   padding: 0;
@@ -6,37 +6,31 @@
 }
 
 :root {
-  --bg: #0e0716;
-  --bg-2: #160a23;
-  --panel: #1f1130;
-  --panel-2: #2a1a3f;
-  --panel-3: #341f4d;
-  --line: #43295e;
-  --text: #f6efe1;
-  --text-dim: #c9b8d8;
-  --muted: #8e7aa8;
-  --gold: #ffd166;
-  --money: #ffc857;
-  --red: #ef476f;
-  --blue: #38c5ff;
-  --green: #62d18b;
-  --purple: #b388ff;
-  --chips: #5ac8fa;
-  --mult: #ff5e7e;
-  --shadow: 0 12px 24px rgba(0,0,0,.45), 0 2px 0 rgba(255,255,255,.04) inset;
+  /* 蓝色水纹主调 */
+  --bg:       #0a1438;
+  --bg-2:     #111e44;
+  --panel:    #1e3068;
+  --panel-2:  #152050;
+  --panel-3:  #0f1840;
+  --line:     #3a5ab8;
+  --text:     #ffffff;
+  --text-dim: #c9d2e8;
+  --muted:    #8a9bbf;
+  --gold:     #ffc857;
+  --money:    #ffb030;
+  --red:      #ff5566;
+  --blue:     #4dd6ff;
+  --green:    #62d18b;
+  --purple:   #8a7bff;
+  --chips:    #4dd6ff;
+  --mult:     #ff8844;
+  --shadow:   0 12px 24px rgba(0,0,0,.5), 0 2px 0 rgba(255,255,255,.04) inset;
 }
 
 html, body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-}
-
-body {
-  background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(122, 80, 188, 0.20), transparent 60%),
-    radial-gradient(900px 600px at 100% 30%, rgba(56, 197, 255, 0.10), transparent 60%),
-    linear-gradient(180deg, #0a0512 0%, #0e0716 50%, #0a0512 100%);
 }
 
 #app {

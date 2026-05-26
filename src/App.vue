@@ -2196,197 +2196,235 @@ onBeforeUnmount(() => {
 
       <!-- ========== BATTLE ========== -->
       <div v-else-if="isBattlePhase" key="game" class="battle-screen">
-        <!-- 顶部 HUD -->
-        <div class="hud">
-          <!-- 盲注信息 -->
-          <div class="hud-blind">
-            <div class="hud-blind-icon">{{ blind.badge }}</div>
-            <div>
-              <span class="hud-blind-name">{{ blind.name }}</span>
-              <span class="hud-blind-req">{{ blind.targetScore }}</span>
+
+        <!-- ===== LEFT SIDEBAR ===== -->
+        <aside class="sb">
+
+          <!-- 4.1 盲注大面板 -->
+          <div class="sb-panel sb-blind-panel">
+            <div class="sb-blind-header">
+              <span class="sb-blind-badge">{{ blind.badge }}</span>
+              <div>
+                <div class="sb-blind-name">{{ blind.name }}</div>
+                <div class="sb-blind-type-tag" :class="blind.type">{{ blind.type === 'boss' ? '头目盲注' : blind.type === 'big' ? '大盲注' : '小盲注' }}</div>
+              </div>
+            </div>
+            <div class="sb-inset">
+              <span class="sb-inset-label">目标至少</span>
+              <span class="sb-inset-big red">{{ blind.targetScore }}</span>
+              <span class="sb-inset-sub">通关奖励 +${{ blind.reward }}</span>
             </div>
           </div>
 
-          <!-- 筹码 × 倍率 -->
-          <div class="hud-score" :class="{ 'is-resolving': isResolvingHand }">
-            <div class="hud-score-col chips" ref="hudChipsRef">
-              <span class="hud-score-val chips-color">
-                <ScoreCounter :value="displayChips" :duration="0.4" />
-              </span>
-              <span class="hud-score-label">筹码</span>
+          <!-- 4.2 Round score -->
+          <div class="sb-panel sb-round-score">
+            <div class="sb-panel-label">Round score</div>
+            <div class="sb-inset">
+              <span class="sb-round-val"><ScoreCounter :value="totalScore" /></span>
             </div>
-            <div class="hud-score-col mult" ref="hudMultRef">
-              <span class="hud-score-val mult-color">×<ScoreCounter :value="displayMult" :duration="0.4" /></span>
-              <span class="hud-score-label">倍率</span>
-            </div>
-          </div>
-
-          <!-- 元数据 -->
-          <div class="hud-meta">
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">回合</span>
-              <span class="hud-meta-val">{{ currentBlind + 1 }}</span>
-            </div>
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">底注</span>
-              <span class="hud-meta-val">{{ currentAnte }}/{{ TOTAL_ANTES }}</span>
-            </div>
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">手数</span>
-              <span class="hud-meta-val green">{{ handsLeft }}</span>
-            </div>
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">弃牌</span>
-              <span class="hud-meta-val blue">{{ discardsLeft }}</span>
-            </div>
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">牌库</span>
-              <span class="hud-meta-val">{{ drawPileCount }}/52</span>
-            </div>
-            <div class="hud-meta-item">
-              <span class="hud-meta-label">
-                <img :src="`${BASE_URL}assets/icons/delapouite_coins.svg`" alt="" class="inline-icon dim" />
-                金钱
-              </span>
-              <span class="hud-meta-val gold">${{ money }}</span>
+            <!-- 进度条 -->
+            <div class="sb-progress-wrap">
+              <div class="sb-progress-bar">
+                <div class="sb-progress-fill hud-progress" :style="{ width: `${Math.min((totalScore / blind.targetScore) * 100, 100)}%` }"></div>
+              </div>
             </div>
           </div>
 
-          <!-- 进度条 -->
-          <div class="hud-progress">
-            <div class="hud-progress-bar">
-              <div
-                class="hud-progress-fill"
-                :style="{ width: `${Math.min((totalScore / blind.targetScore) * 100, 100)}%` }"
-              ></div>
+          <!-- 4.3 HAND 计分大块（chips × mult） -->
+          <div class="sb-panel sb-hand-score">
+            <div class="sb-hand-type-name">
+              {{ isResolvingHand && lastPlayedHand ? lastPlayedHand.name : (selectedScorePreview.handType ? selectedScorePreview.handType.name : '—') }}
             </div>
-            <span class="hud-progress-text"><ScoreCounter :value="totalScore" /> / {{ blind.targetScore }}</span>
-          </div>
-        </div>
-
-        <!-- AI 教练 + 弃牌模式切换 + 设置（战斗阶段 HUD 顶部右侧） -->
-        <div class="hud-top-right">
-          <!-- 弃牌模式开关：出牌 ↔ 弃牌 -->
-          <button
-            class="discard-mode-btn"
-            :class="{ 'is-discard-mode': isDiscardMode }"
-            :title="isDiscardMode ? '切换到出牌模式' : '切换到弃牌模式'"
-            data-no-sfx="true"
-            @click="toggleDiscardMode"
-          >
-            {{ isDiscardMode ? '出' : '弃' }}
-          </button>
-          <!-- v3.1.0 A7：battle 阶段统一用 scene-aware AiCoachOverlay -->
-          <AiCoachOverlay
-            :visible="aiVisible && isBattlePhase"
-            :scene="aiScene"
-            :payload="aiPayload"
-            @recommend="onAiRecommend"
-            @clear="onAiClear"
-            @toast="onAiToast"
-          />
-        </div>
-
-        <!-- Joker 区 -->
-        <div class="joker-bar">
-          <div class="joker-bar-label">JOKERS · {{ ownedJokers.length }}/{{ maxJokers }}</div>
-          <div class="joker-bar-row">
-            <JokerCard
-              v-for="joker in ownedJokers"
-              :key="joker.id"
-              :joker="joker"
-              size="normal"
-              context="owned"
-              :triggering="triggeredJokerIds.includes(joker.id)"
-              @longpress="showJokerDetail"
-            />
-            <JokerCard
-              v-for="slot in maxJokers - ownedJokers.length"
-              :key="'joker-slot-' + slot"
-              :empty="true"
-              size="normal"
-            />
-          </div>
-        </div>
-
-        <!-- 出牌预览区 -->
-        <div class="play-table" ref="playTableRef">
-          <div v-if="isResolvingHand" class="play-table-scored">
-            <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
-            <p v-if="lastScore > 0" class="play-table-score">+ <ScoreCounter :value="lastScore" /></p>
-          </div>
-          <div v-else-if="selectedCardCount > 0" class="play-table-preview">
-            <p class="play-table-placeholder">已选 {{ selectedCardCount }} 张 · 等待出牌</p>
-            <div v-if="selectedScorePreview.handType" class="preview-formula">
-              <span class="formula-hand-type">{{ selectedScorePreview.handType.name }}</span>
-              <span class="formula-row">
-                <span class="formula-chips">{{ selectedScorePreview.totalChips }}</span>
-                <span class="formula-op">×</span>
-                <span class="formula-mult">{{ selectedScorePreview.totalMult }}</span>
-                <span class="formula-op">=</span>
-                <span class="formula-score">{{ selectedScorePreview.score }}</span>
-              </span>
+            <div class="sb-score-row">
+              <div class="sb-chips-block" ref="hudChipsRef" :class="{ 'score-flash': isResolvingHand }">
+                <span class="sb-chips-val"><ScoreCounter :value="displayChips" :duration="0.3" /></span>
+                <span class="sb-score-unit">筹码</span>
+              </div>
+              <div class="sb-score-x">×</div>
+              <div class="sb-mult-block" ref="hudMultRef" :class="{ 'score-flash': isResolvingHand }">
+                <span class="sb-mult-val"><ScoreCounter :value="displayMult" :duration="0.3" /></span>
+                <span class="sb-score-unit">倍率</span>
+              </div>
             </div>
           </div>
-          <div v-else class="play-table-idle">
-            <span class="play-table-placeholder">选择手牌组成牌型（1-5 张）</span>
-          </div>
-        </div>
 
-        <!-- 手牌扇区 -->
-        <div class="hand-area">
-          <div class="hand-area-header">
-            <span class="hand-area-label">
-              手牌 · 已选 {{ selectedCardCount }} 张
-              <span v-if="selectionStatus.tone === 'ready'" class="hand-ready">· {{ selectionStatus.title }}</span>
-            </span>
-            <div class="hand-area-sorts">
-              <button @click="sortHandByRank" class="btn-sort">按点数</button>
-              <button @click="sortHandBySuit" class="btn-sort">按花色</button>
-              <button @click="showHandInfo = true" class="btn-sort info">比赛信息</button>
+          <!-- 4.4 Hands / Discards -->
+          <div class="sb-hands-row">
+            <div class="sb-hands-block">
+              <div class="sb-hands-label">手数</div>
+              <div class="sb-inset-sm">
+                <span class="sb-hands-val green">{{ handsLeft }}</span>
+              </div>
+            </div>
+            <div class="sb-hands-block">
+              <div class="sb-hands-label">弃牌</div>
+              <div class="sb-inset-sm">
+                <span class="sb-hands-val red">{{ discardsLeft }}</span>
+              </div>
             </div>
           </div>
-          <div class="hand-fan">
-            <PlayingCard
-              v-for="(card, index) in hand"
-              :ref="(el) => setHandCardRef(el, index)"
-              :key="card.id"
-              :card="card"
-              :selected="card.selected"
-              :selectable="true"
-              :deal-index="index"
-              compact
-              :recommended="recommendedKindOf(card.id)"
-              @click="toggleCard(card)"
-              :style="{
-                marginLeft: index === 0 ? '0' : '-8px',
-                transform: card.selected ? 'translateY(-28px)' : 'none',
-                zIndex: card.selected ? 60 : index
-              }"
-              class="hand-card"
+
+          <!-- 4.5 操作按钮 -->
+          <div class="sb-btns">
+            <button class="sb-btn sb-btn-red" @click="openConfirm({ title: '重新开始？', message: '当前局面将丢失，确认重新开始一局？', confirmLabel: '重新开始', cancelLabel: '取消', tone: 'danger', onConfirm: restart })">
+              重新开始
+            </button>
+            <button class="sb-btn sb-btn-orange" @click="openSettings" data-no-sfx="true">
+              设置
+            </button>
+          </div>
+
+          <!-- 4.6 金币 -->
+          <div class="sb-panel sb-money-panel">
+            <span class="sb-money-sign">$</span>
+            <span class="sb-money-val">{{ money }}</span>
+          </div>
+
+          <!-- 4.7 关卡进度 -->
+          <div class="sb-ante-row">
+            <span class="sb-ante-label orange">底注 {{ currentAnte }}/{{ TOTAL_ANTES }}</span>
+            <span class="sb-ante-sep">·</span>
+            <span class="sb-ante-label blue">回合 {{ currentBlind + 1 }}</span>
+          </div>
+
+          <!-- AI 教练 + 弃牌模式切换 -->
+          <div class="sb-ai-row">
+            <button
+              class="discard-mode-btn"
+              :class="{ 'is-discard-mode': isDiscardMode }"
+              :title="isDiscardMode ? '切换到出牌模式' : '切换到弃牌模式'"
+              data-no-sfx="true"
+              @click="toggleDiscardMode"
+            >
+              {{ isDiscardMode ? '出' : '弃' }}
+            </button>
+            <AiCoachOverlay
+              :visible="aiVisible && isBattlePhase"
+              :scene="aiScene"
+              :payload="aiPayload"
+              @recommend="onAiRecommend"
+              @clear="onAiClear"
+              @toast="onAiToast"
             />
           </div>
-        </div>
+        </aside>
 
-        <!-- 底部操作栏 -->
-        <div class="bottom-bar">
-          <button
-            @click="playHand"
-            :disabled="!canPlaySelectedCards"
-            class="btn-primary"
-            :class="{ disabled: !canPlaySelectedCards }"
-          >
-            {{ canPlaySelectedCards ? '出牌' : '请先选牌' }}
-          </button>
-          <button
-            @click="discardCards"
-            :disabled="isResolvingHand || discardsLeft === 0 || selectedCardCount === 0"
-            class="btn-warn"
-            :class="{ disabled: isResolvingHand || discardsLeft === 0 || selectedCardCount === 0 }"
-          >
-            弃牌
-          </button>
-          <button class="btn-ghost">取消选择</button>
+        <!-- ===== RIGHT MAIN AREA ===== -->
+        <div class="battle-main">
+
+          <!-- 5.1 顶部 Joker 槽 -->
+          <div class="joker-bar">
+            <div class="joker-bar-label">JOKERS · {{ ownedJokers.length }}/{{ maxJokers }}</div>
+            <div class="joker-bar-row">
+              <JokerCard
+                v-for="joker in ownedJokers"
+                :key="joker.id"
+                :joker="joker"
+                size="normal"
+                context="owned"
+                :triggering="triggeredJokerIds.includes(joker.id)"
+                @longpress="showJokerDetail"
+              />
+              <JokerCard
+                v-for="slot in maxJokers - ownedJokers.length"
+                :key="'joker-slot-' + slot"
+                :empty="true"
+                size="normal"
+              />
+            </div>
+          </div>
+
+          <!-- 5.2 牌型 floating text -->
+          <Transition name="hand-type-pop">
+            <div v-if="isResolvingHand && lastPlayedHand" class="play-type-float">
+              {{ lastPlayedHand.name }}
+            </div>
+          </Transition>
+
+          <!-- 5.3 Played Hand 展示区 -->
+          <div class="play-table" ref="playTableRef">
+            <div v-if="isResolvingHand" class="play-table-scored">
+              <p class="play-table-hand-type">★ {{ lastPlayedHand?.name }} ★</p>
+            </div>
+            <div v-else-if="selectedCardCount > 0" class="play-table-preview">
+              <p class="play-table-placeholder">已选 {{ selectedCardCount }} 张 · 等待出牌</p>
+              <div v-if="selectedScorePreview.handType" class="preview-formula">
+                <span class="formula-hand-type">{{ selectedScorePreview.handType.name }}</span>
+                <span class="formula-row">
+                  <span class="formula-chips">{{ selectedScorePreview.totalChips }}</span>
+                  <span class="formula-op">×</span>
+                  <span class="formula-mult">{{ selectedScorePreview.totalMult }}</span>
+                  <span class="formula-op">=</span>
+                  <span class="formula-score">{{ selectedScorePreview.score }}</span>
+                </span>
+              </div>
+            </div>
+            <div v-else class="play-table-idle">
+              <span class="play-table-placeholder">选择手牌组成牌型（1-5 张）</span>
+            </div>
+          </div>
+
+          <!-- 5.4 手牌区 -->
+          <div class="hand-area">
+            <div class="hand-area-header">
+              <span class="hand-area-label">
+                手牌 · 已选 {{ selectedCardCount }} 张
+                <span v-if="selectionStatus.tone === 'ready'" class="hand-ready">· {{ selectionStatus.title }}</span>
+              </span>
+              <div class="hand-area-sorts">
+                <button @click="sortHandByRank" class="btn-sort">按点数</button>
+                <button @click="sortHandBySuit" class="btn-sort">按花色</button>
+                <button @click="showHandInfo = true" class="btn-sort info">比赛信息</button>
+              </div>
+            </div>
+            <div class="hand-fan">
+              <PlayingCard
+                v-for="(card, index) in hand"
+                :ref="(el) => setHandCardRef(el, index)"
+                :key="card.id"
+                :card="card"
+                :selected="card.selected"
+                :selectable="true"
+                :deal-index="index"
+                compact
+                :recommended="recommendedKindOf(card.id)"
+                @click="toggleCard(card)"
+                :style="{
+                  marginLeft: index === 0 ? '0' : '-8px',
+                  transform: card.selected ? 'translateY(-28px)' : 'none',
+                  zIndex: card.selected ? 60 : index
+                }"
+                class="hand-card"
+              />
+            </div>
+          </div>
+
+          <!-- 5.5 底部按钮 -->
+          <div class="bottom-bar battle-btns">
+            <button
+              @click="playHand"
+              :disabled="!canPlaySelectedCards"
+              class="battle-btn-play"
+              :class="{ disabled: !canPlaySelectedCards }"
+            >
+              出牌 ({{ selectedCardCount }}/5)
+            </button>
+            <button
+              @click="discardCards"
+              :disabled="isResolvingHand || discardsLeft === 0 || selectedCardCount === 0"
+              class="battle-btn-discard"
+              :class="{ disabled: isResolvingHand || discardsLeft === 0 || selectedCardCount === 0 }"
+            >
+              弃牌 ({{ selectedCardCount }})
+            </button>
+            <button @click="sortHandByRank" class="battle-btn-sort">按点数排序</button>
+            <button @click="sortHandBySuit" class="battle-btn-sort">按花色排序</button>
+            <!-- 5.6 牌库 -->
+            <div class="deck-pile">
+              <div class="deck-pile-back"></div>
+              <span class="deck-pile-count">{{ drawPileCount }}/52</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2462,41 +2500,44 @@ onBeforeUnmount(() => {
 }
 
 .balatro-shell {
-  --bg: #082818;
-  --felt-deep: #082818;
-  --felt-mid: #0b3a24;
-  --felt-high: #0d4a2e;
-  --wood-dark: #1a1008;
-  --wood: #3a2414;
-  --panel: #1f1130;
-  --panel-2: #2a1a3f;
-  --line: #43295e;
-  --text: #f6efe1;
-  --text-dim: #c9b8d8;
-  --muted: #8e7aa8;
-  --gold: #ffd166;
-  --money: #ffc857;
-  --red: #ef476f;
-  --blue: #38c5ff;
-  --green: #62d18b;
-  --purple: #b388ff;
-  --chips: #5ac8fa;
-  --mult: #ff5e7e;
+  /* ===== 蓝色水纹主题配色系统 ===== */
+  --bg-deep:    #0a1438;
+  --bg-water:   #1a2858;
+  --bg-glow:    #2d4080;
+  --sb-blue:    #4a6bff;
+  --sb-blue-dk: #2d4080;
+  --sb-panel:   #1a2858;
+  --inset:      #050818;
+  --chips-from: #4dd6ff;
+  --chips-to:   #2196f3;
+  --mult-from:  #ff8844;
+  --mult-to:    #ff3344;
+
+  /* 兼容旧有 CSS 变量（部分组件用到） */
+  --panel:    #1e3068;
+  --panel-2:  #152050;
+  --panel-3:  #0f1840;
+  --line:     #3a5ab8;
+  --text:     #ffffff;
+  --text-dim: #c9d2e8;
+  --muted:    #8a9bbf;
+  --gold:     #ffc857;
+  --money:    #ffb030;
+  --red:      #ff5566;
+  --blue:     #4dd6ff;
+  --green:    #62d18b;
+  --purple:   #8a7bff;
+  --chips:    #4dd6ff;
+  --mult:     #ff8844;
 
   height: 100vh;
   overflow: hidden;
   position: relative;
   background:
-    radial-gradient(ellipse 70% 45% at 50% 0%, rgba(255, 235, 190, 0.10), transparent 65%),
-    radial-gradient(ellipse 90% 70% at 50% 45%, rgba(40, 130, 80, 0.32), transparent 72%),
-    radial-gradient(ellipse 130% 105% at 50% 55%, transparent 50%, rgba(0, 0, 0, 0.58) 100%),
-    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.014) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.030) 0 1px, transparent 1px 3px),
-    linear-gradient(180deg, var(--felt-high) 0%, var(--felt-mid) 50%, var(--felt-deep) 100%);
-  box-shadow:
-    inset 0 0 0 7px var(--wood),
-    inset 0 0 0 9px var(--wood-dark),
-    inset 0 0 90px rgba(0, 0, 0, 0.55);
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(45,64,128,.6), transparent 70%),
+    radial-gradient(ellipse 120% 80% at 30% 70%, rgba(74,107,255,.15), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.012) 0 2px, transparent 2px 4px),
+    linear-gradient(135deg, #0a1438 0%, #1a2858 50%, #0a1438 100%);
   color: var(--text);
   font-family: 'Inter', system-ui, -apple-system, 'PingFang SC', sans-serif;
 }
@@ -2516,10 +2557,10 @@ onBeforeUnmount(() => {
   font-weight: 700;
   box-shadow: 0 12px 24px rgba(0,0,0,.45);
 }
-.toast--info    { background: #38c5ff; color: #0a1a24; }
-.toast--success { background: #62d18b; color: #0a1a24; }
-.toast--error   { background: #ef476f; color: #fff; }
-.toast--warning { background: #ffc857; color: #2a1700; }
+.toast--info    { background: #4dd6ff; color: #050818; }
+.toast--success { background: #62d18b; color: #050818; }
+.toast--error   { background: #ff5566; color: #fff; }
+.toast--warning { background: #ffc857; color: #1a1000; }
 
 /* =====================================================
    Confirm Dialog
@@ -2537,8 +2578,8 @@ onBeforeUnmount(() => {
 }
 .confirm-panel {
   width: min(440px, 92vw);
-  background: linear-gradient(180deg, var(--panel) 0%, #160a23 100%);
-  border: 2px solid var(--line);
+  background: linear-gradient(180deg, #1e3068 0%, #0f1840 100%);
+  border: 2px solid rgba(74,107,255,.5);
   border-radius: 18px;
   padding: 28px 26px 22px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6);
@@ -3712,174 +3753,385 @@ onBeforeUnmount(() => {
 }
 
 /* =====================================================
-   BATTLE SCREEN
+   BATTLE SCREEN — 左 Sidebar + 右主区双栏布局
    ===================================================== */
 .battle-screen {
   height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 16px 8px;
+  flex-direction: row;
+  overflow: hidden;
   background:
-    radial-gradient(70% 45% at 50% 8%, rgba(255, 235, 190, 0.08), transparent 65%),
-    radial-gradient(85% 55% at 50% 100%, rgba(0, 0, 0, 0.35), transparent 70%);
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(45,64,128,.6), transparent 70%),
+    radial-gradient(ellipse 120% 80% at 30% 70%, rgba(74,107,255,.15), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.012) 0 2px, transparent 2px 4px),
+    linear-gradient(135deg, #0a1438 0%, #1a2858 50%, #0a1438 100%);
 }
 
-/* HUD */
-.hud {
-  display: grid;
-  grid-template-columns: 200px 1fr 220px;
-  gap: 10px;
-  align-items: stretch;
-}
-.hud-blind {
-  background: linear-gradient(180deg, var(--panel-2), #1a0f24);
-  border: 2px solid var(--line);
-  border-radius: 14px;
-  padding: 10px 14px;
+/* ===== LEFT SIDEBAR ===== */
+.sb {
+  width: 300px;
+  min-width: 300px;
+  height: 100%;
+  background: linear-gradient(180deg, #1a2a5a 0%, #111e44 100%);
+  border-right: 2px solid rgba(74,107,255,.4);
   display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.hud-blind-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #ef476f, #8a1f3a);
-  border: 2px solid #1a1024;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 900;
-  color: #fff;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 10px 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex-shrink: 0;
 }
-.hud-blind-name {
-  display: block;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 1px;
-}
-.hud-blind-req {
-  display: block;
-  font-size: 24px;
-  font-weight: 900;
-  color: var(--red);
-  line-height: 1;
-  margin-top: 2px;
+
+/* sidebar 通用面板 */
+.sb-panel {
+  border-radius: 10px;
+  border: 2px solid rgba(74,107,255,.5);
+  background: linear-gradient(180deg, #1e3068 0%, #152050 100%);
+  padding: 8px 10px;
 }
 
-.hud-score {
-  background: #0a0414;
-  border: 2px solid var(--line);
-  border-radius: 14px;
-  padding: 8px 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+/* 4.1 盲注面板 */
+.sb-blind-panel { flex-shrink: 0; }
+.sb-blind-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
 }
-.hud-score-col {
+.sb-blind-badge {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.sb-blind-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+.sb-blind-type-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+.sb-blind-type-tag.small { background: rgba(98,209,139,.2); color: #62d18b; }
+.sb-blind-type-tag.big   { background: rgba(255,200,87,.2); color: #ffc857; }
+.sb-blind-type-tag.boss  { background: rgba(239,71,111,.25); color: #ef476f; }
+
+/* 内嵌黑底数字块 */
+.sb-inset {
+  background: #050818;
+  border-radius: 8px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, var(--panel), #14091f);
-  border-radius: 10px;
-  padding: 6px;
+  gap: 2px;
+  border: 1px solid rgba(74,107,255,.3);
 }
-.hud-score-col.chips { box-shadow: inset 0 0 0 2px rgba(90,200,250,.45); }
-.hud-score-col.mult  { box-shadow: inset 0 0 0 2px rgba(255,94,126,.55); }
-.hud-score-val {
+.sb-inset-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #8a9bbf;
+  letter-spacing: 1px;
+}
+.sb-inset-big {
   font-size: 28px;
   font-weight: 900;
   line-height: 1;
+  font-family: 'Press Start 2P', monospace;
 }
-.chips-color { color: var(--chips); }
-.mult-color  { color: var(--mult); }
-.hud-score-label {
-  font-size: 10px;
-  font-weight: 900;
-  color: var(--text-dim);
-  margin-top: 2px;
-  letter-spacing: 1px;
+.sb-inset-big.red   { color: #ff5566; text-shadow: 0 0 10px rgba(255,85,102,.5); }
+.sb-inset-big.blue  { color: #4dd6ff; text-shadow: 0 0 10px rgba(77,214,255,.5); }
+.sb-inset-sub {
+  font-size: 9px;
+  color: #ffc857;
+  font-weight: 700;
 }
 
-.hud-meta {
-  background: linear-gradient(180deg, var(--panel-2), #1a0f24);
-  border: 2px solid var(--line);
-  border-radius: 14px;
-  padding: 8px 12px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 10px;
-  align-content: center;
-}
-.hud-meta-item {
-  display: flex;
-  flex-direction: column;
-}
-.hud-meta-label {
+/* 4.2 Round Score */
+.sb-round-score { flex-shrink: 0; }
+.sb-panel-label {
   font-size: 9px;
-  font-weight: 900;
-  color: var(--text-dim);
-  letter-spacing: 1px;
+  font-weight: 700;
+  color: #8a9bbf;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
-.hud-meta-val {
-  font-size: 18px;
+.sb-round-val {
+  font-size: 26px;
   font-weight: 900;
-  color: var(--gold);
+  color: #4dd6ff;
+  font-family: 'Press Start 2P', monospace;
+  text-shadow: 0 0 12px rgba(77,214,255,.6);
   line-height: 1;
 }
-.hud-meta-val.green { color: var(--green); }
-.hud-meta-val.blue  { color: var(--blue); }
-
-/* HUD progress */
-.hud-progress {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.hud-progress-bar {
-  flex: 1;
-  height: 10px;
+.sb-progress-wrap { margin-top: 6px; }
+.sb-progress-bar {
+  width: 100%;
+  height: 8px;
   border-radius: 999px;
-  background: rgba(0,0,0,.3);
+  background: rgba(0,0,0,.4);
   overflow: hidden;
+  border: 1px solid rgba(74,107,255,.3);
 }
-.hud-progress-fill {
+.sb-progress-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #f59e0b, #fde68a);
-  box-shadow: 0 0 12px rgba(245,158,11,.4);
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, #4dd6ff, #2196f3);
+  box-shadow: 0 0 8px rgba(77,214,255,.5);
+  transition: width 0.4s ease;
 }
-.hud-progress-text {
+/* override .hud-progress 防止 GSAP 飞字 selector 失效 */
+.sb-progress-fill.hud-progress { grid-column: unset; display: block; }
+
+/* 4.3 HAND 计分大块 */
+.sb-hand-score {
+  flex-shrink: 0;
+  padding: 10px;
+}
+.sb-hand-type-name {
   font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 2px;
+  text-align: center;
+  margin-bottom: 8px;
+  min-height: 14px;
+}
+.sb-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.sb-chips-block {
+  flex: 1;
+  background: linear-gradient(135deg, #4dd6ff 0%, #2196f3 100%);
+  border-radius: 10px;
+  padding: 10px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.3),
+    0 4px 0 #0d4a80,
+    0 6px 20px rgba(33,150,243,.4);
+  border: 2px solid #1a7bd4;
+  transition: transform 0.15s ease;
+}
+.sb-mult-block {
+  flex: 1;
+  background: linear-gradient(135deg, #ff8844 0%, #ff3344 100%);
+  border-radius: 10px;
+  padding: 10px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.25),
+    0 4px 0 #8b1a1a,
+    0 6px 20px rgba(255,51,68,.4);
+  border: 2px solid #cc2233;
+  transition: transform 0.15s ease;
+}
+.sb-chips-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 22px;
+  font-weight: 900;
+  color: #000d1a;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+}
+.sb-mult-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 22px;
+  font-weight: 900;
+  color: #1a0000;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(255,255,255,.2);
+}
+.sb-score-unit {
+  font-size: 8px;
   font-weight: 700;
-  color: var(--text-dim);
-  white-space: nowrap;
+  color: rgba(0,0,0,.6);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+.sb-score-x {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  font-weight: 900;
+  color: #c9d2e8;
+  flex-shrink: 0;
+}
+/* 出牌时 chips/mult 块跳动效果 */
+.sb-chips-block.score-flash,
+.sb-mult-block.score-flash {
+  animation: score-block-flash 0.35s ease;
+}
+@keyframes score-block-flash {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); }
+  70%  { transform: scale(0.97); }
+  100% { transform: scale(1); }
 }
 
-/* Joker bar (战斗中持有的 Joker) */
+/* 4.4 Hands / Discards */
+.sb-hands-row {
+  display: flex;
+  gap: 6px;
+}
+.sb-hands-block {
+  flex: 1;
+  background: linear-gradient(180deg, #1e3068, #152050);
+  border: 2px solid rgba(74,107,255,.5);
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.sb-hands-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #8a9bbf;
+  letter-spacing: 1px;
+}
+.sb-inset-sm {
+  background: #050818;
+  border-radius: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(74,107,255,.3);
+  min-width: 40px;
+  text-align: center;
+}
+.sb-hands-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+.sb-hands-val.green { color: #62d18b; text-shadow: 0 0 8px rgba(98,209,139,.5); }
+.sb-hands-val.red   { color: #ff5544; text-shadow: 0 0 8px rgba(255,85,68,.5); }
+
+/* 4.5 操作按钮 */
+.sb-btns {
+  display: flex;
+  gap: 6px;
+}
+.sb-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 900;
+  font-family: 'Press Start 2P', monospace;
+  letter-spacing: 0.5px;
+  border: 2px solid rgba(0,0,0,.4);
+  cursor: pointer;
+  color: #fff;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  text-align: center;
+  line-height: 1.3;
+}
+.sb-btn:hover { transform: translateY(-1px); }
+.sb-btn:active { transform: translateY(1px); }
+.sb-btn-red {
+  background: linear-gradient(180deg, #ff4444, #cc1111);
+  box-shadow: 0 3px 0 #880000, 0 5px 0 rgba(0,0,0,.4);
+}
+.sb-btn-orange {
+  background: linear-gradient(180deg, #ff8800, #cc5500);
+  box-shadow: 0 3px 0 #883300, 0 5px 0 rgba(0,0,0,.4);
+}
+
+/* 4.6 金币面板 */
+.sb-money-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.sb-money-sign {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffc857;
+}
+.sb-money-val {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  font-weight: 900;
+  color: #ffb030;
+  text-shadow: 0 0 10px rgba(255,176,48,.6);
+  line-height: 1;
+}
+
+/* 4.7 Ante row */
+.sb-ante-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 4px;
+}
+.sb-ante-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.sb-ante-label.orange { color: #ffc857; }
+.sb-ante-label.blue   { color: #4dd6ff; }
+.sb-ante-sep          { color: #8a9bbf; font-size: 10px; }
+
+/* AI row */
+.sb-ai-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+/* ===== RIGHT MAIN AREA ===== */
+.battle-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 8px;
+  overflow: hidden;
+}
+
+/* 5.1 Joker bar */
 .joker-bar {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px 12px;
-  background:
-    linear-gradient(180deg, #1f1130 0%, #14091f 60%, #0a0414 100%);
-  border: 2px solid var(--line);
-  border-radius: 14px;
+  padding: 8px 10px 10px;
+  background: rgba(10,20,60,.6);
+  border: 2px solid rgba(74,107,255,.35);
+  border-radius: 12px;
   align-self: flex-start;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 4px 12px rgba(0,0,0,.4);
+  width: 100%;
 }
 .joker-bar-label {
   font-family: 'Press Start 2P', monospace;
-  font-size: 8px;
-  color: var(--gold);
+  font-size: 7px;
+  color: #ffc857;
   letter-spacing: 2px;
   text-shadow: 1px 1px 0 #000;
 }
@@ -3887,19 +4139,33 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   align-items: flex-end;
+  flex-wrap: wrap;
 }
 
-/* Play table */
+/* 5.2 floating hand type */
+.play-type-float {
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 0 rgba(0,0,0,.6), 0 0 20px rgba(74,107,255,.7);
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+/* 5.3 Play table */
 .play-table {
   flex: 1;
-  min-height: 0;
+  min-height: 80px;
   display: grid;
   place-items: center;
-  border: 2px dashed rgba(255,255,255,.08);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(56,197,255,.04), rgba(255,94,126,.04));
+  border: 2px dashed rgba(74,107,255,.25);
+  border-radius: 16px;
+  background: rgba(5,8,24,.35);
   text-align: center;
-  overflow-y: auto;
+  overflow: hidden;
 }
 .play-table-idle,
 .play-table-preview,
@@ -3907,53 +4173,53 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 12px;
 }
 .play-table-placeholder {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
-  color: var(--muted);
+  color: #8a9bbf;
   letter-spacing: 1px;
 }
 .preview-formula {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .formula-hand-type {
   font-family: 'Press Start 2P', monospace;
-  font-size: 16px;
-  color: var(--purple);
+  font-size: 13px;
+  color: #4dd6ff;
   letter-spacing: 2px;
   text-shadow: 0 2px 0 rgba(0,0,0,0.6);
 }
 .formula-row {
   display: inline-flex;
   align-items: baseline;
-  gap: 14px;
+  gap: 12px;
   font-family: 'Press Start 2P', monospace;
   font-weight: 900;
 }
 .formula-row .formula-chips {
-  color: var(--chips);
-  font-size: 30px;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(90,200,250,0.55);
+  color: #4dd6ff;
+  font-size: 26px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(77,214,255,0.55);
 }
 .formula-row .formula-mult {
-  color: var(--mult);
-  font-size: 30px;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(255,94,126,0.55);
+  color: #ff8844;
+  font-size: 26px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 14px rgba(255,136,68,0.55);
 }
 .formula-row .formula-score {
-  color: var(--gold);
-  font-size: 34px;
-  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 16px rgba(255,209,102,0.7);
+  color: #ffc857;
+  font-size: 30px;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.7), 0 0 16px rgba(255,200,87,0.7);
 }
 .formula-row .formula-op {
-  color: var(--text-dim);
-  font-size: 22px;
+  color: #c9d2e8;
+  font-size: 18px;
 }
 .play-table-cards {
   display: flex;
@@ -3962,21 +4228,24 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .play-table-hand-type {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
-  color: var(--gold);
+  color: #ffc857;
   letter-spacing: 2px;
+  font-family: 'Press Start 2P', monospace;
 }
 .play-table-score {
-  font-size: 48px;
+  font-size: 42px;
   font-weight: 900;
-  color: var(--gold);
-  text-shadow: 0 0 20px rgba(255,209,102,.5);
+  color: #ffc857;
+  text-shadow: 0 0 20px rgba(255,200,87,.5);
+  font-family: 'Press Start 2P', monospace;
 }
 
-/* Hand area */
+/* 5.4 Hand area */
 .hand-area {
   min-height: 0;
+  flex-shrink: 0;
 }
 .hand-area-header {
   display: flex;
@@ -3987,15 +4256,15 @@ onBeforeUnmount(() => {
 .hand-area-label {
   font-size: 11px;
   font-weight: 900;
-  color: var(--text-dim);
+  color: #c9d2e8;
   letter-spacing: 1px;
 }
 .hand-ready {
-  color: var(--green);
+  color: #62d18b;
   margin-left: 6px;
 }
 .hand-building {
-  color: var(--blue);
+  color: #4dd6ff;
   margin-left: 6px;
 }
 .hand-area-sorts {
@@ -4006,21 +4275,122 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding: 12px 0 4px;
-  min-height: 150px;
+  padding: 8px 0 4px;
+  min-height: 130px;
 }
 .hand-card {
   flex-shrink: 0;
   transition: transform 0.18s ease, margin 0.18s ease;
 }
 
-/* Bottom bar */
+/* 5.5 Bottom battle buttons */
 .bottom-bar {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   justify-content: center;
   padding: 4px 0;
+  flex-shrink: 0;
 }
+.battle-btns {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.battle-btn-play {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  font-family: 'Press Start 2P', monospace;
+  letter-spacing: 0.5px;
+  border: 2px solid rgba(0,0,0,.4);
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(180deg, #62d18b, #2a9d57);
+  box-shadow: 0 4px 0 #145c2e, 0 6px 0 rgba(0,0,0,.4);
+  transition: transform 0.1s ease, opacity 0.15s;
+  white-space: nowrap;
+}
+.battle-btn-play:hover:not(.disabled)   { transform: translateY(-2px); }
+.battle-btn-play:active:not(.disabled)  { transform: translateY(3px); box-shadow: 0 1px 0 #145c2e; }
+.battle-btn-play.disabled  { opacity: 0.45; cursor: not-allowed; }
+
+.battle-btn-discard {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 900;
+  font-family: 'Press Start 2P', monospace;
+  letter-spacing: 0.5px;
+  border: 2px solid rgba(0,0,0,.4);
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(180deg, #ff5544, #cc2211);
+  box-shadow: 0 4px 0 #660a00, 0 6px 0 rgba(0,0,0,.4);
+  transition: transform 0.1s ease, opacity 0.15s;
+  white-space: nowrap;
+}
+.battle-btn-discard:hover:not(.disabled)   { transform: translateY(-2px); }
+.battle-btn-discard:active:not(.disabled)  { transform: translateY(3px); box-shadow: 0 1px 0 #660a00; }
+.battle-btn-discard.disabled  { opacity: 0.45; cursor: not-allowed; }
+
+.battle-btn-sort {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(74,107,255,.4);
+  cursor: pointer;
+  color: #c9d2e8;
+  background: rgba(74,107,255,.15);
+  transition: transform 0.1s ease, background 0.15s;
+  white-space: nowrap;
+}
+.battle-btn-sort:hover { background: rgba(74,107,255,.3); color: #fff; }
+
+/* 5.6 牌堆 */
+.deck-pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.deck-pile-back {
+  width: 32px;
+  height: 44px;
+  border-radius: 5px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 2px, transparent 2px 6px),
+    linear-gradient(135deg, #4a2090 0%, #1a0a40 100%);
+  border: 2px solid #1a0a40;
+  box-shadow: 0 3px 0 rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.1);
+}
+.deck-pile-count {
+  font-size: 8px;
+  font-weight: 700;
+  color: #8a9bbf;
+  letter-spacing: 0.5px;
+}
+
+/* HUD legacy 兼容 — GSAP 飞字需要 .hud-progress 选择器 */
+.hud-progress {
+  display: block;
+}
+
+/* compat — 旧有 chips-color / mult-color 仍用于计分面板 */
+.chips-color { color: #4dd6ff; }
+.mult-color  { color: #ff8844; }
+.hud-score-label {
+  font-size: 10px;
+  font-weight: 900;
+  color: #c9d2e8;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+.hud-meta-val { color: #ffc857; font-size: 18px; font-weight: 900; }
+.hud-meta-val.green { color: #62d18b; }
+.hud-meta-val.blue  { color: #4dd6ff; }
 
 /* =====================================================
    INFO MODAL
@@ -4158,33 +4528,46 @@ onBeforeUnmount(() => {
    Responsive
    ===================================================== */
 @media (max-width: 1024px) {
-  .hud {
-    grid-template-columns: 1fr 1fr;
-  }
-  .hud-meta {
-    grid-column: 1 / -1;
-  }
-  .hud-progress {
-    grid-column: 1 / -1;
-  }
   .blind-select-cards {
     flex-wrap: wrap;
   }
   .shop-items {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
+  .sb {
+    width: 240px;
+    min-width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* 窄屏：sidebar 变为顶部 HUD 条，主区占全高 */
+  .battle-screen {
+    flex-direction: column;
+  }
+  .sb {
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+    border-right: none;
+    border-bottom: 2px solid rgba(74,107,255,.4);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .sb-panel, .sb-hands-row, .sb-btns, .sb-money-panel, .sb-ante-row, .sb-ai-row {
+    flex-shrink: 0;
+  }
+  .sb-hand-score { order: -1; }
+  .battle-main { overflow-y: auto; }
 }
 
 @media (max-width: 640px) {
   .phase-panel {
     padding: 16px;
-  }
-  .hud {
-    grid-template-columns: 1fr;
-  }
-  .battle-screen {
-    padding: 8px;
-    gap: 6px;
   }
   .bottom-bar {
     flex-wrap: wrap;
@@ -4207,9 +4590,14 @@ onBeforeUnmount(() => {
   .info-row-played {
     text-align: center;
   }
+  .sb-chips-val, .sb-mult-val { font-size: 16px; }
 }
 
-/* 全局设置齿轮按钮（fixed 右上角，所有 phase 可见） */
+/* 全局设置齿轮按钮（fixed 右上角，所有 phase 可见，battle 阶段 sidebar 内有专属按钮，此处隐藏） */
+.battle-screen ~ .hud-icon-btn.settings-trigger,
+.battle-screen .hud-icon-btn.settings-trigger {
+  display: none;
+}
 .hud-icon-btn.settings-trigger {
   position: fixed;
   top: 16px;
@@ -4217,9 +4605,9 @@ onBeforeUnmount(() => {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: rgba(20, 14, 36, 0.78);
-  border: 1px solid rgba(255, 209, 102, 0.45);
-  color: #ffd166;
+  background: rgba(10, 20, 60, 0.85);
+  border: 1px solid rgba(74, 107, 255, 0.45);
+  color: #4dd6ff;
   font-size: 20px;
   cursor: pointer;
   z-index: 250;
@@ -4230,16 +4618,12 @@ onBeforeUnmount(() => {
 }
 .hud-icon-btn.settings-trigger:hover {
   transform: rotate(45deg);
-  background: rgba(40, 26, 70, 0.9);
+  background: rgba(26, 40, 90, 0.9);
 }
 
-/* AI 教练：战斗 HUD 顶部右侧容器 */
+/* AI 教练：战斗阶段已移至 sidebar，保留 hud-top-right 为空（兼容旧引用） */
 .hud-top-right {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 10px;
-  padding: 0 6px;
+  display: none;
 }
 
 /* v3.1.0 A7：弃牌模式切换按钮 */

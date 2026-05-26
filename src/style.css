@@ -2,11 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Balatro 蓝色水纹配色系统 ===== */
+:root {
+  /* 背景 */
+  --bg-deep:     #0a1438;
+  --bg-water:    #1a2858;
+  --bg-glow:     #2d4080;
+
+  /* 左 sidebar */
+  --sb-blue:    #4a6bff;
+  --sb-blue-dk: #2d4080;
+  --sb-panel:   #1a2858;
+  --inset:      #050818;
+
+  /* Chips × Mult */
+  --chips-from: #4dd6ff;
+  --chips-to:   #2196f3;
+  --mult-from:  #ff8844;
+  --mult-to:    #ff3344;
+
+  /* 金币 / 按钮 */
+  --gold:       #ffc857;
+  --money:      #ffb030;
+  --btn-red:    #ff3838;
+  --btn-orange: #ff8800;
+  --btn-blue:   #4a6bff;
+  --btn-green:  #62d18b;
+  --btn-discard:#ff5544;
+
+  /* 文字 */
+  --text:       #ffffff;
+  --text-dim:   #c9d2e8;
+  --muted:      #8a9bbf;
+
+  /* 字体 */
+  --pixel:   'Press Start 2P', monospace;
+  --display: 'VT323', monospace;
+  --sans:    'Inter', system-ui, sans-serif;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, 'PingFang SC', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0a2e1d;
-  color: #f6efe1;
+  background: var(--bg-deep);
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(45,64,128,.6), transparent 70%),
+    radial-gradient(ellipse 120% 80% at 30% 70%, rgba(74,107,255,.15), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.012) 0 2px, transparent 2px 4px),
+    linear-gradient(135deg, #0a1438 0%, #1a2858 50%, #0a1438 100%);
 }

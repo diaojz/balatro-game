@@ -130,16 +130,15 @@
   font-family: 'Press Start 2P', 'Georgia', monospace;
   font-size: 64px;
   font-weight: 900;
-  color: #ffe082;
+  color: #4dd6ff;
   text-shadow:
-    0 0 0 #fff,
-    -3px 0 0 #6b3fa0,
-    3px 0 0 #6b3fa0,
-    0 -3px 0 #6b3fa0,
-    0 3px 0 #6b3fa0,
-    0 6px 0 #2a1c33,
-    0 0 28px rgba(255,209,102,0.9),
-    0 0 56px rgba(255,150,40,0.7);
+    -3px 0 0 #0d2060,
+    3px 0 0 #0d2060,
+    0 -3px 0 #0d2060,
+    0 3px 0 #0d2060,
+    0 6px 0 #050818,
+    0 0 28px rgba(77,214,255,0.9),
+    0 0 56px rgba(33,150,243,0.7);
   pointer-events: none;
   z-index: 150;
   letter-spacing: 4px;
@@ -345,10 +344,10 @@
   font-size: 76px;
   letter-spacing: 2px;
   text-shadow:
-    -3px 0 0 #6b3fa0, 3px 0 0 #6b3fa0,
-    0 -3px 0 #6b3fa0, 0 3px 0 #6b3fa0,
-    0 6px 0 #2a1c33,
-    0 0 28px rgba(255,209,102,0.9),
+    -3px 0 0 #0d2060, 3px 0 0 #0d2060,
+    0 -3px 0 #0d2060, 0 3px 0 #0d2060,
+    0 6px 0 #050818,
+    0 0 28px rgba(255,200,87,0.9),
     0 0 48px rgba(255,150,40,0.7);
 }
 .final-formula-enter-active {
